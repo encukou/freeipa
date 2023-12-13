@@ -211,12 +211,12 @@ workshop, which you will need locally.
 Fetch Vagrant box
 -----------------
 
-Please fetch the Vagrant box prior to the workshop.  It is > 700MB
+Please fetch the Vagrant box prior to the workshop.  It is > 500MB
 so it may not be feasible to download it during the workshop.
 
 ::
 
-  $ vagrant box add freeipa/freeipa-workshop
+  $ vagrant box add fedora/39-cloud-base
 
 
 Add hosts file entries
