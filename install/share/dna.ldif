@@ -38,4 +38,9 @@ dn: cn=Distributed Numeric Assignment Plugin,cn=plugins,cn=config
 changetype: modify
 replace: nsslapd-pluginEnabled
 nsslapd-pluginEnabled: on
-
+-
+add: dnaRemoteBindMethod
+dnaRemoteBindMethod: SASL/GSSAPI
+-
+add: dnaRemoteConnProtocol
+dnaRemoteConnProtocol: LDAP
