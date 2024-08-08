@@ -539,7 +539,7 @@ class Service:
             pass
         else:
             with open(cafile, 'wb') as fd:
-                for cert, _unused1, _unused2, _unused3 in ca_certs:
+                for cert, _unused1, _unused2, _unused3, _unused4 in ca_certs:
                     fd.write(cert.public_bytes(x509.Encoding.PEM))
 
     def export_ca_certs_nssdb(self, db, ca_is_configured, conn=None):
@@ -559,7 +559,7 @@ class Service:
         except errors.NotFound:
             pass
         else:
-            for cert, nickname, trust_flags in ca_certs:
+            for cert, nickname, trust_flags, _serial in ca_certs:
                 db.add_cert(cert, nickname, trust_flags)
 
     def is_configured(self):

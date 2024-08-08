@@ -329,7 +329,7 @@ class RedHatTaskNamespace(BaseTaskNamespace):
                 raise
 
             has_eku = set()
-            for cert, nickname, trusted, _ext_key_usage in ca_certs:
+            for cert, nickname, trusted, _ext_key_usage, _serial in ca_certs:
                 try:
                     subject = cert.subject_bytes
                     issuer = cert.issuer_bytes

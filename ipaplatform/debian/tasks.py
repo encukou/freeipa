@@ -126,7 +126,7 @@ used by ca-certificates and is provided for information only.\
             logger.error("Could not create %s", path)
             raise
 
-        for cert, nickname, trusted, _ext_key_usage in ca_certs:
+        for cert, nickname, trusted, _ext_key_usage, _serial in ca_certs:
             if not trusted:
                 continue
 

@@ -179,10 +179,9 @@ def update_ca_cert(ldap, base_dn, cert, trusted=None, ext_key_usage=None,
         # We are adding a new cert, validate it
         if entry.single_value['ipaCertSubject'].lower() != subject.lower():
             raise ValueError("subject name mismatch")
-        if entry.single_value['ipaPublicKey'] != public_key:
-            raise ValueError("subject public key info mismatch")
         entry['ipaCertIssuerSerial'].append(issuer_serial)
         entry['cACertificate;binary'].append(cert)
+        entry['ipaPublicKey'].append(public_key)
 
     # Update key trust
     if trusted is not None:
@@ -222,6 +221,35 @@ def update_ca_cert(ldap, base_dn, cert, trusted=None, ext_key_usage=None,
 
     ldap.update_entry(entry)
     clean_old_config(ldap, base_dn, dn, config_ipa, config_compat)
+
+
+def delete_ca_cert(ldap, base_dn, cert):
+    """
+    Remove a CA certificate in the certificate store.
+    """
+    subject, issuer_serial, _public_key = _parse_cert(cert)
+
+    filter = ldap.make_filter({'ipaCertSubject': subject})
+    result, _truncated = ldap.find_entries(
+        base_dn=DN(('cn', 'certificates'), ('cn', 'ipa'), ('cn', 'etc'),
+                   base_dn),
+        filter=filter,
+        attrs_list=['cn', 'ipaCertSubject', 'ipaCertIssuerSerial',
+                    'ipaPublicKey', 'ipaKeyTrust', 'ipaKeyExtUsage',
+                    'ipaConfigString', 'cACertificate;binary'])
+    entry = result[0]
+
+    for old_cert in entry['cACertificate;binary']:
+        # Check if we are adding a new cert
+        if old_cert == cert:
+            break
+    else:
+        raise ValueError("certificate not found")
+
+    entry['ipaCertIssuerSerial'].remove(issuer_serial)
+    entry['cACertificate;binary'].remove(cert)
+
+    ldap.update_entry(entry)
 
 
 def put_ca_cert(ldap, base_dn, cert, nickname, trusted=None,
@@ -309,11 +337,14 @@ def get_ca_certs(ldap, base_dn, compat_realm, compat_ipa_ca,
 
             for cert in entry.get('cACertificate;binary', []):
                 try:
-                    _parse_cert(cert)
+                    _subject, issuer_serial, _pkinfo = _parse_cert(cert)
                 except ValueError:
                     certs = []
                     break
-                certs.append((cert, nickname, trusted, ext_key_usage))
+                serial_number = issuer_serial.split(';')[1]
+                certs.append(
+                    (cert, nickname, trusted, ext_key_usage, serial_number)
+                )
     except errors.NotFound:
         try:
             ldap.get_entry(container_dn, [''])
@@ -381,9 +412,9 @@ def get_ca_certs_nss(ldap, base_dn, compat_realm, compat_ipa_ca,
 
     certs = get_ca_certs(ldap, base_dn, compat_realm, compat_ipa_ca,
                          filter_subject=filter_subject)
-    for cert, nickname, trusted, ext_key_usage in certs:
+    for cert, nickname, trusted, ext_key_usage, _serial_number in certs:
         trust_flags = key_policy_to_trust_flags(trusted, True, ext_key_usage)
-        nss_certs.append((cert, nickname, trust_flags))
+        nss_certs.append((cert, nickname, trust_flags, _serial_number))
 
     return nss_certs
 
