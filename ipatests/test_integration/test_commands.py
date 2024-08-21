@@ -121,6 +121,82 @@ letsencryptauthorityr3 = (
 )
 le_r3_nick = "CN=R3,O=Let's Encrypt,C=US"
 
+# Certificates for reproducing duplicate ipaCertSubject values.
+# The trick to creating the second intermediate is for the validity
+# period to be different. In this case the second CA certificate
+# was issued 3 years+1day after the original.
+originalsubjectchain = (
+    b'-----BEGIN CERTIFICATE-----\n'
+    b'MIIDcjCCAlqgAwIBAgICEAAwDQYJKoZIhvcNAQELBQAwRDEeMBwGA1UECgwVQ2Vy\n'
+    b'dGlmaWNhdGUgU2hhY2sgTHRkMSIwIAYDVQQDDBlDZXJ0aWZpY2F0ZSBTaGFjayBS\n'
+    b'b290IENBMB4XDTIxMDgwNzE4MDQyNloXDTQxMDgwMTE4MDQyNlowTDEeMBwGA1UE\n'
+    b'CgwVQ2VydGlmaWNhdGUgU2hhY2sgTHRkMSowKAYDVQQDDCFDZXJ0aWZpY2F0ZSBT\n'
+    b'aGFjayBJbnRlcm1lZGlhdGUgQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK\n'
+    b'AoIBAQC2RNo7atuVWC/6tDCGforNFvvSFdUwqHxltFmg61i2hmdHAjTaYI1ZJdgB\n'
+    b'y7ApGc8RYc7tfaNrUNA8Chd/9Cu4eW2KuTnAozxytXQneNXloK2xb9iLIhETa1FC\n'
+    b'Hw5BbrmJSWjiVYQsM6bzeiFsKJs4qnP1T9iFHuqmggTtCTPajoYhn6ZKfK3pmB8P\n'
+    b'6XRcp5O9vUhNHJWdpuUjOL32fsBEpV0vKWlsemqDhJrhzj3+YCKt6xrSdpK64HUW\n'
+    b'Kf3YM/K4G6vU5M8DgSFex6T1u2vCsQYJ4Mv8LVCho8awTZoBsimy1tiM0V7GmmBE\n'
+    b'0Uck/U0381NBpNYdv7eyF682SbihAgMBAAGjZjBkMB0GA1UdDgQWBBTtHQCp1dBF\n'
+    b'ypsegtWcXhXDdopIgDAfBgNVHSMEGDAWgBRJuz/14J1ZXqvpOuikJJ62NtuiGTAS\n'
+    b'BgNVHRMBAf8ECDAGAQH/AgEBMA4GA1UdDwEB/wQEAwIBhjANBgkqhkiG9w0BAQsF\n'
+    b'AAOCAQEAkCBm6u+k/x4QoqqwOJvy8sjq7bUCh73qNPAFlqVSSB8UdCyu21EaXCj8\n'
+    b'dbZa3GNRGk6JACTEUVQ1SD8SkC1E1/IWuEzYOKOP6FmTFbC4V5zU9LAnGFJapS6Q\n'
+    b'CGwU2F44oflBbfOodFznqKPPuENX0gmm4ddvoT915WUOvVLKLuVujkU/ffGKAc8U\n'
+    b'RxRIJ3W2Ybjs9ANg7JqB3Ny8i5QAGHzjRVwU+IgTrJCYPS2DrRYtN3glKBTlyKyR\n'
+    b'xMy0PVKwVo/ItDO3fZ0fsAiIO+4pI51A0lFge5Bg/DzsotZxcWhdTelWjYI9JNca\n'
+    b'y2GPzV1wlxK+ui1uLCWEvKbPtaCfeQ==\n'
+    b'-----END CERTIFICATE-----\n'
+    b'-----BEGIN CERTIFICATE-----\n'
+    b'MIIDeTCCAmGgAwIBAgIUUbo+eGRT5jiS2eIoEzRhXaUx4gwwDQYJKoZIhvcNAQEL\n'
+    b'BQAwRDEeMBwGA1UECgwVQ2VydGlmaWNhdGUgU2hhY2sgTHRkMSIwIAYDVQQDDBlD\n'
+    b'ZXJ0aWZpY2F0ZSBTaGFjayBSb290IENBMB4XDTIxMDgwNzE4MDQyNloXDTQxMDgw\n'
+    b'MjE4MDQyNlowRDEeMBwGA1UECgwVQ2VydGlmaWNhdGUgU2hhY2sgTHRkMSIwIAYD\n'
+    b'VQQDDBlDZXJ0aWZpY2F0ZSBTaGFjayBSb290IENBMIIBIjANBgkqhkiG9w0BAQEF\n'
+    b'AAOCAQ8AMIIBCgKCAQEArh41PPmI6rg7nz3cRqsbCqGgD3+vAD4DNs/Cnp+vhM//\n'
+    b'7Di8FuMoyyLDpD+RdT/Vkvh2Xhp+OcjYSFLX8xeFRy0blfzel2Tq7PiD83BwewsG\n'
+    b'BOarlhkbQGxlGxkr4Fi6z0kNNAfbE2ZzBIs4XSppm7xl4YJyLQD0FkzdrU+zrZuK\n'
+    b'3ELQzk3UWfSSrnbYABY2LBgkny5m7y/kJOMyqn+/T1CUthXD3OpGtyQm2kuEooDZ\n'
+    b'xP1eq30gS8oGYAw2nR/8vJPuyeZaMxM4eNLuc35uq8/6pI+xNEpzGt7xAk1ul/xc\n'
+    b'ewOY2kjh4KJCNK/nCjALzxqhNRHhnH8bA6xtOcgdBwIDAQABo2MwYTAdBgNVHQ4E\n'
+    b'FgQUSbs/9eCdWV6r6TropCSetjbbohkwHwYDVR0jBBgwFoAUSbs/9eCdWV6r6Tro\n'
+    b'pCSetjbbohkwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAYYwDQYJKoZI\n'
+    b'hvcNAQELBQADggEBAC35stv/1WZhWblRTZP3XHhH0usHRGTUY7zNSrgS5sb3ERsf\n'
+    b'hgbmFbomra5jKaBqffToOZKLEo+n3tfIPokus35NUQn7ox/6qPp0rJEK8dfLx9jA\n'
+    b'0VTqREbgaAf5xLaX874++OTiM1sPVYG3Egsb1A/YCtDek8mZkKk21g+DZlFMOSDl\n'
+    b'Hw+c3gZUnv6bIT8P09z+9yca2Lvg/dpj2ln3PbOykXzwuGSoNxjUt2OSdCbwyN+f\n'
+    b'hO4NFtDvx74Ggi5bcTrz0ZKO6g8SQotii7cSKAdpIWDpXl8cfsK3SRbkCsg+Fg1S\n'
+    b'kMJEFyDEkKu8Qe6zwKXIAoeKULLO6ADgFVH9CmM=\n'
+    b'-----END CERTIFICATE-----\n'
+)
+interm_nick = "CN=Certificate Shack Intermediate CA,O=Certificate Shack Ltd"
+intermediate_serial = "4096"
+
+duplicatesubject = (
+    b'-----BEGIN CERTIFICATE-----\n'
+    b'MIIDcjCCAlqgAwIBAgICEAEwDQYJKoZIhvcNAQELBQAwRDEeMBwGA1UECgwVQ2Vy\n'
+    b'dGlmaWNhdGUgU2hhY2sgTHRkMSIwIAYDVQQDDBlDZXJ0aWZpY2F0ZSBTaGFjayBS\n'
+    b'b290IENBMB4XDTI0MDgwODE4MDQyNloXDTQ0MDgwMjE4MDQyNlowTDEeMBwGA1UE\n'
+    b'CgwVQ2VydGlmaWNhdGUgU2hhY2sgTHRkMSowKAYDVQQDDCFDZXJ0aWZpY2F0ZSBT\n'
+    b'aGFjayBJbnRlcm1lZGlhdGUgQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK\n'
+    b'AoIBAQCzUmUBEO/w1wslS8H304/qfsbeIJX0C5Tm8K2H9JXoauFFej1GZoHqeE+x\n'
+    b'YQvSMuMFcKks3ps9+9yVKuBPtMwbmXsqwlQXORU8DuKhtRzKIOj7nEGw6AQIsfkG\n'
+    b'Q4DjD1ytXliyM7vVfxYD+P1CFDK4NR+K1JLdi3WkYOdCelOQMwNspN/ebiqvwonl\n'
+    b'2asQ6+a13Y0ln1AdrLBvqtR5Z+Gq5+tiC5tA+LKea0e3neQGKjfp/BNPJ+ooNHPR\n'
+    b'86iKDjBKAabvfrHLG2t6oo9+N4xRBGtPYQh9LOQPZ4OedciCo1s2zs+F+4/6co6T\n'
+    b'DsbQt7NJKQ3BJKosvZBhC62lc4evAgMBAAGjZjBkMB0GA1UdDgQWBBTvALT5i2gq\n'
+    b'8yq2Uh8lZGgMoKVClzAfBgNVHSMEGDAWgBRJuz/14J1ZXqvpOuikJJ62NtuiGTAS\n'
+    b'BgNVHRMBAf8ECDAGAQH/AgEBMA4GA1UdDwEB/wQEAwIBhjANBgkqhkiG9w0BAQsF\n'
+    b'AAOCAQEAVjx1aGNK08/Nhf0JYMxMb9Dqg5m7LNOVBs1jurPtwS3uN+84997GRqIQ\n'
+    b'i+gp/tQVF2YT/RAmt+X0aDLFiSkBcOk87zoFRkR7PZrhhtPo6pSVMN7ngD4/dmp9\n'
+    b'ESbiI8+iF5ZxqI7c3o2N/LtZpi+hWSCJ/xwbOl05jpNQ6ddl+UzDpJ0oNsyndiJA\n'
+    b'yciaCvluK027J4xNym166lqwm6CqiOkm8R/G6NJrEH2Xs5XBCyfeH9V0pkXDbrUe\n'
+    b'Ldqc9ys7l7/MGZi6Qg2nA7J8ErCkrI6eZOocJktSF6SRfXd1NqiqCiNZZQjD6XKZ\n'
+    b'4fMKTKPX6Q2k10iriAIn4RgVjzM05A==\n'
+    b'-----END CERTIFICATE-----\n'
+)
+duplicate_serial = "4097"
+
 
 class TestIPACommand(IntegrationTest):
     """
@@ -1560,6 +1636,68 @@ class TestIPACommand(IntegrationTest):
         self.master.run_command(['date', '-s', '-15Years'])
 
         assert isrgrootx1_nick in result
+
+    def test_ipa_cacert_manage_duplicate_certsubject(self):
+        """Test for ipa-cacert-manage install with duplicated
+           certificate subjects. This relies on the behavior
+           of NSS to show the certificates separately rather than
+           lumping the duplicates together. This requires different
+           validity periods, say 3 years + 1 day.
+        """
+
+        certfile = os.path.join(self.master.config.test_dir, 'chain.pem')
+        self.master.put_file_contents(certfile, originalsubjectchain)
+        result = self.master.run_command(
+            [paths.IPA_CACERT_MANAGE, 'install', certfile])
+
+        certs = self.master.run_command(
+            [paths.IPA_CACERT_MANAGE, 'list'], raiseonerr=False
+        ).stdout_text
+
+        assert f"{interm_nick}  {intermediate_serial}" in certs
+
+        certfile = os.path.join(self.master.config.test_dir, 'interm.pem')
+        self.master.put_file_contents(certfile, duplicatesubject)
+        result = self.master.run_command(
+            [paths.IPA_CACERT_MANAGE, 'install', certfile])
+
+        certs = self.master.run_command(
+            [paths.IPA_CACERT_MANAGE, 'list'], raiseonerr=False
+        ).stdout_text
+
+        # If the duplicate subject certificates are not sufficiently
+        # different in validity period, or prior to the this fix,
+        # the test will fail because only one of the duplicately named
+        # subject certificates will be visible: the second one (4097).
+        assert f"{interm_nick}  {intermediate_serial}" in certs
+        assert f"{interm_nick}  {duplicate_serial}" in certs
+
+        # Make sure we can install the new certs systemwide
+        # No assertions needed, it will work or it won't
+        self.master.run_command(["ipa-certupdate"])
+
+        # delete one of the duplicate subjects, no serial number
+        result = self.master.run_command(
+            ['ipa-cacert-manage', 'delete', interm_nick],
+            raiseonerr=False
+        )
+        assert result.returncode == 1
+        assert 'Multiple matching certificates' in result.stderr_text
+
+        # delete one of the duplicate subjects by the serial number
+        result = self.master.run_command(
+            ['ipa-cacert-manage', 'delete', interm_nick,
+             '--serial', intermediate_serial,],
+            raiseonerr=False
+        )
+        assert result.returncode == 0
+
+        certs = self.master.run_command(
+            [paths.IPA_CACERT_MANAGE, 'list'], raiseonerr=False
+        ).stdout_text
+
+        assert f"{interm_nick}  {intermediate_serial}" not in certs
+        assert f"{interm_nick}  {duplicate_serial}" in certs
 
 
 class TestIPACommandWithoutReplica(IntegrationTest):
