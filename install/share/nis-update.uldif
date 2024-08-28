@@ -36,3 +36,9 @@ default:nis-filter: (&(macAddress=*)(fqdn=*)(objectClass=ipaHost))
 default:nis-keys-format: %mregsub("%{macAddress} %{fqdn}","(..)[:\\\|-](..)[:\\\|-](..)[:\\\|-](..)[:\\\|-](..)[:\\\|-](..) (.*)","%7")
 default:nis-values-format: %mregsub("%{macAddress} %{fqdn}","(..)[:\\\|-](..)[:\\\|-](..)[:\\\|-](..)[:\\\|-](..)[:\\\|-](..) (.*)","%1:%2:%3:%4:%5:%6 %7")
 default:nis-secure: no
+
+dn: nis-domain=$DOMAIN+nis-map=group.byname, cn=NIS Server, cn=plugins, cn=config
+onlyifexist:nis-filter: (objectClass=posixGroup)
+
+dn: nis-domain=$DOMAIN+nis-map=group.bygid, cn=NIS Server, cn=plugins, cn=config
+onlyifexist:nis-filter: (objectClass=posixGroup)

@@ -37,6 +37,7 @@ default:nis-domain: $DOMAIN
 default:nis-map: group.byname
 default:nis-base: cn=groups, cn=accounts, $SUFFIX
 default:nis-secure: no
+default:nis-filter: (objectClass=posixGroup)
 
 dn: nis-domain=$DOMAIN+nis-map=group.bygid, cn=NIS Server, cn=plugins, cn=config
 default:objectclass: top
@@ -45,6 +46,7 @@ default:nis-domain: $DOMAIN
 default:nis-map: group.bygid
 default:nis-base: cn=groups, cn=accounts, $SUFFIX
 default:nis-secure: no
+default:nis-filter: (objectClass=posixGroup)
 
 dn: nis-domain=$DOMAIN+nis-map=netid.byname, cn=NIS Server, cn=plugins, cn=config
 default:objectclass: top
