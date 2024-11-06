@@ -162,11 +162,19 @@
 
 # BIND employs 'pkcs11' OpenSSL engine instead of native PKCS11
 # Fedora 31+ uses OpenSSL engine, as well as Fedora ELN (RHEL9)
-%if 0%{?fedora} || 0%{?rhel} >= 9
+# Howevever, Fedora 40+ and RHEL10+ use OpenSSL provider
+%if 0%{?fedora} < 40 || 0%{?rhel} == 9
     %global openssl_pkcs11_version 0.4.10-6
+    %global openssl_pkcs11_name openssl-pkcs11
     %global softhsm_version 2.5.0-4
 %else
+%if 0%{?fedora} >= 40 || 0%{?rhel} >= 10
+    %global openssl_pkcs11_version 0.3
+    %global openssl_pkcs11_name pkcs11-provider
+    %global softhsm_version 2.6.1
+%else
     %global with_bind_pkcs11 1
+%endif
 %endif
 
 %if 0%{?rhel} == 8
@@ -627,7 +635,7 @@ Requires: bind-dnssec-utils >= %{bind_version}
 Requires: bind-pkcs11 >= %{bind_version}
 %else
 Requires: softhsm >= %{softhsm_version}
-Requires: openssl-pkcs11 >= %{openssl_pkcs11_version}
+Requires: %{openssl_pkcs11_name} >= %{openssl_pkcs11_version}
 %endif
 # See https://bugzilla.redhat.com/show_bug.cgi?id=1825812
 # RHEL 8.3+ and Fedora 32+ have 2.1

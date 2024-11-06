@@ -50,6 +50,8 @@ dist_app_DATA =				\
 	bind.named.conf.template	\
 	bind.openssl.cnf.template	\
 	bind.openssl.cryptopolicy.cnf.template	\
+	bind.openssl.provider.cnf.template	\
+	bind.openssl.provider.crp.cnf.template	\
 	certmap.conf.template		\
 	kdc.conf.template		\
 	kdc_extensions.template		\

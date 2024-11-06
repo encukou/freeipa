@@ -155,21 +155,36 @@ class DNSKeySyncInstance(service.Service):
         return False
 
     def setup_named_openssl_conf(self):
+        opensslcnf_tmpl = None
+        conf_file_dict = {
+            'CRYPTO_POLICY_FILE': paths.CRYPTO_POLICY_OPENSSLCNF_FILE,
+            'SOFTHSM_MODULE': paths.LIBSOFTHSM2_SO,
+            'SOFTHSM_PIN': paths.DNSSEC_SOFTHSM_PIN,
+        }
         if constants.NAMED_OPENSSL_ENGINE is not None:
-            logger.debug("Setup OpenSSL config for BIND")
-            # setup OpenSSL config for BIND,
-            # this one is needed because FreeIPA installation
-            # disables p11-kit-proxy PKCS11 module
-            conf_file_dict = {
-                'OPENSSL_ENGINE': constants.NAMED_OPENSSL_ENGINE,
-                'SOFTHSM_MODULE': paths.LIBSOFTHSM2_SO,
-                'CRYPTO_POLICY_FILE': paths.CRYPTO_POLICY_OPENSSLCNF_FILE,
-            }
+            # Traditional configuration using OpenSSL engine API
+            # requires openssl-pkcs11 engine to load PKCS#11 token
+            # provided by SoftHSMv2
+            conf_file_dict['OPENSSL_ENGINE'] = constants.NAMED_OPENSSL_ENGINE
             if paths.CRYPTO_POLICY_OPENSSLCNF_FILE is None:
                 opensslcnf_tmpl = "bind.openssl.cnf.template"
             else:
                 opensslcnf_tmpl = "bind.openssl.cryptopolicy.cnf.template"
+        elif constants.NAMED_OPENSSL_PROVIDER is not None:
+            # OpenSSL provider API is preferred and requires
+            # pkcs11-provider to load PKCS#11 token provided by SoftHSMv2
+            if paths.CRYPTO_POLICY_OPENSSLCNF_FILE is None:
+                opensslcnf_tmpl = "bind.openssl.provider.cnf.template"
+            else:
+                opensslcnf_tmpl = "bind.openssl.provider.crp.cnf.template"
+        else:
+            conf_file_dict = None
 
+        if opensslcnf_tmpl is not None and conf_file_dict is not None:
+            logger.debug("Setup OpenSSL config for BIND")
+            # setup OpenSSL config for BIND,
+            # this one is needed because FreeIPA installation
+            # disables p11-kit-proxy PKCS11 module
             named_openssl_txt = ipautil.template_file(
                 os.path.join(paths.USR_SHARE_IPA_DIR, opensslcnf_tmpl),
                 conf_file_dict
@@ -189,7 +204,8 @@ class DNSKeySyncInstance(service.Service):
             'SOFTHSM2_CONF', paths.DNSSEC_SOFTHSM2_CONF,
             quotes=False, separator='=')
 
-        if constants.NAMED_OPENSSL_ENGINE is not None:
+        if any([constants.NAMED_OPENSSL_ENGINE is not None,
+                constants.NAMED_OPENSSL_PROVIDER is not None]):
             directivesetter.set_directive(
                 sysconfig,
                 'OPENSSL_CONF', paths.DNSSEC_OPENSSL_CONF,
@@ -200,9 +216,23 @@ class DNSKeySyncInstance(service.Service):
                 constants.NAMED_OPTIONS_VAR,
                 separator="="
             ) or ''
-            if not self._are_named_options_configured(options):
+            new_options = None
+            if all([constants.NAMED_OPENSSL_ENGINE is not None,
+                    not self._are_named_options_configured(options)]):
                 engine_cmd = "-E {}".format(constants.NAMED_OPENSSL_ENGINE)
                 new_options = ' '.join([options, engine_cmd])
+            # Remove '-E pkcs11' from the options in the OpenSSL provider case
+            if all([constants.NAMED_OPENSSL_ENGINE is None,
+                    self._are_named_options_configured(options)]):
+                lst_options = options.split()
+                try:
+                    idx = lst_options.index('-E')
+                    lst_options.pop(idx)
+                    lst_options.pop(idx)
+                    new_options = ' '.join(lst_options)
+                except ValueError:
+                    pass
+            if new_options is not None:
                 directivesetter.set_directive(
                     sysconfig,
                     constants.NAMED_OPTIONS_VAR, new_options,
@@ -216,7 +246,8 @@ class DNSKeySyncInstance(service.Service):
             'SOFTHSM2_CONF', paths.DNSSEC_SOFTHSM2_CONF,
             quotes=False, separator='=')
 
-        if constants.NAMED_OPENSSL_ENGINE is not None:
+        if any([constants.NAMED_OPENSSL_ENGINE is not None,
+                constants.NAMED_OPENSSL_PROVIDER is not None]):
             directivesetter.set_directive(
                 sysconfig,
                 'OPENSSL_CONF', paths.DNSSEC_OPENSSL_CONF,

@@ -19,6 +19,10 @@ from ipaplatform.osinfo import osinfo
 # Fedora 29 has both
 HAS_NFS_CONF = osinfo.version_number >= (30,)
 
+# Fedora 40 and later deprecated OpenSSL engine and recommend using OpenSSL
+# provider API.
+HAS_OPENSSL_PROVIDER = osinfo.version_number >= (40,)
+
 
 __all__ = ("constants", "User", "Group")
 
@@ -32,6 +36,9 @@ class FedoraConstantsNamespace(RedHatConstantsNamespace):
     if HAS_NFS_CONF:
         SECURE_NFS_VAR = None
 
-    NAMED_OPENSSL_ENGINE = "pkcs11"
+    if HAS_OPENSSL_PROVIDER:
+        NAMED_OPENSSL_PROVIDER = True
+    else:
+        NAMED_OPENSSL_ENGINE = "pkcs11"
 
 constants = FedoraConstantsNamespace()

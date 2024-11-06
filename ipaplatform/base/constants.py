@@ -120,6 +120,7 @@ class BaseConstantsNamespace:
     NAMED_DATA_DIR = "data/"
     NAMED_OPTIONS_VAR = "OPTIONS"
     NAMED_OPENSSL_ENGINE = None
+    NAMED_OPENSSL_PROVIDER = None
     NAMED_ZONE_COMMENT = ""
     PKI_USER = User("pkiuser")
     PKI_GROUP = Group("pkiuser")
