@@ -584,7 +584,7 @@ def host_is_master(ldap, fqdn):
         raise errors.ValidationError(name='hostname', error=_('An IPA master host cannot be deleted or disabled'))
     except errors.NotFound:
         # Good, not a master
-        return
+        pass
 
 
 def add_missing_object_class(ldap, objectclass, dn, entry_attrs=None, update=True):
