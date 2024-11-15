@@ -402,6 +402,7 @@ def exit_on_managed_topology(what, hint="topologysegment"):
 
 
 def main():
+    replica = replica1 = replica2 = None
     installutils.check_server_configuration()
     options, args = parse_options()
 
