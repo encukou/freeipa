@@ -102,6 +102,7 @@ a more detailed description for clarity.
 import re
 import decimal
 import base64
+import binascii
 import datetime
 import inspect
 import typing
@@ -1523,7 +1524,11 @@ class CertificateSigningRequest(Param):
             return value
 
         value = strip_csr_header(value)
-        return base64.b64decode(value)
+        try:
+            return base64.b64decode(value)
+        except binascii.Error as e:
+            raise CertificateOperationError(
+                error=_('not a valid CSR: %s' % e))
 
     def _convert_scalar(self, value, index=None):
         """
@@ -1537,7 +1542,7 @@ class CertificateSigningRequest(Param):
             try:
                 value = value.encode('ascii')
             except UnicodeDecodeError:
-                raise CertificateOperationError('not a valid CSR')
+                raise CertificateOperationError(error=_('not a valid CSR'))
 
         if isinstance(value, bytes):
             # try to extract DER from whatever we got
