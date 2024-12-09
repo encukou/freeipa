@@ -50,6 +50,7 @@ disable=
     too-many-instance-attributes,
     too-many-locals,
     too-many-nested-blocks,
+    too-many-positional-arguments,
     too-many-public-methods,
     too-many-return-statements,
     too-many-statements,
@@ -123,6 +124,9 @@ disable=
     use-implicit-booleaness-not-comparison-to-string,
     use-implicit-booleaness-not-comparison-to-zero,
     broad-exception-raised,
+    possibly-used-before-assignment,
+    use-yield-from
+    
 
 [REPORTS]
 
@@ -141,7 +145,6 @@ msg-template='{path}:{line}: [{msg_id}({symbol}), {obj}] {msg})'
 
 [VARIABLES]
 dummy-variables-rgx=(_.+|unused)
-
 
 [IPA]
 forbidden-imports=

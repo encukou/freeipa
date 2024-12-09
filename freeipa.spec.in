@@ -1044,7 +1044,7 @@ for i in *.po ; do
 done
 popd
 
-%autopatch -p1
+%autopatch -q -p1
 
 %build
 # PATH is workaround for https://bugzilla.redhat.com/show_bug.cgi?id=1005235

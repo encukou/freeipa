@@ -1428,7 +1428,7 @@ class ReplicationManager:
         try:
             conn.modify_s(dn, mod)
         except ldap.ALREADY_EXISTS:
-            return
+            pass
 
     def force_sync(self, conn, hostname):
 

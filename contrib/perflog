@@ -108,7 +108,6 @@ class parselog(admintool.AdminTool):
             output = True
         if not output:
             print(f' No {empty} found')
-            return
 
     def run(self):
         super(parselog, self).run()

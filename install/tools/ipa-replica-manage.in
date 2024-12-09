@@ -1529,6 +1529,7 @@ def exit_on_managed_topology(what):
              "the topology.".format(what))
 
 def main(options, args):
+    replica = replica1 = replica2 = None
     if os.getegid() == 0:
         installutils.check_server_configuration()
     elif not os.path.exists(paths.IPA_DEFAULT_CONF):

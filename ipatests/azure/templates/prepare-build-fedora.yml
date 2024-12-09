@@ -20,5 +20,13 @@ steps:
 
     echo "Installing FreeIPA development dependencies"
     sudo dnf builddep -y freeipa
-    sudo dnf builddep -y --skip-broken -D "with_wheels 1" -D "with_lint 1" -D "with_doc 1" --spec freeipa.spec.in --best --allowerasing --setopt=install_weak_deps=False
+    version=$(grep VERSION_ID /etc/os-release |cut -d= -f2)
+    if [ $version -ge 41 ]; then
+        cp freeipa.spec.in freeipa.spec
+        sudo dnf builddep -y -D "with_wheels 1" -D "with_lint 1" -D "with_doc 1" --best --allowerasing --setopt=install_weak_deps=False freeipa.spec
+        rm -f freeipa.spec
+    else
+        sudo dnf builddep -y -D "with_wheels 1" -D "with_lint 1" -D "with_doc 1" --spec freeipa.spec.in --best --allowerasing --setopt=install_weak_deps=False
+    fi
+
   displayName: Prepare build environment

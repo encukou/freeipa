@@ -1,6 +1,12 @@
 steps:
 - script: |
     set -e
+    IPA_VERSION=$(echo -e "include(VERSION.m4)\nIPA_VERSION" | m4 - | tail -1)
+    export IPA_VERSION
+    echo "IPA version: ${IPA_VERSION}"
+    cp .wheelconstraints.in .wheelconstraints
+    sed -i -e "s,@VERSION@,${IPA_VERSION},g" .wheelconstraints
     sudo dnf -y install python3-pip
-    python3 -m pip install --user --constraint .wheelconstraints.in --ignore-installed pylint
+    python3 -m pip install --user --constraint .wheelconstraints --ignore-installed pylint
+    rm -f .wheelconstraints
   displayName: Install Lint dependencies

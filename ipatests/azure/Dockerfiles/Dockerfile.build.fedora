@@ -1,10 +1,9 @@
-FROM registry.fedoraproject.org/fedora-toolbox:40
+FROM registry.fedoraproject.org/fedora-toolbox:41
 MAINTAINER [FreeIPA Developers freeipa-devel@lists.fedorahosted.org]
 ENV container=docker LANG=en_US.utf8 LANGUAGE=en_US.utf8 LC_ALL=en_US.utf8
 
 ADD dist /root
 RUN echo 'deltarpm = false' >> /etc/dnf/dnf.conf \
-    && dnf update -y dnf \
     && dnf update -y python3 \
     && (sed -i 's/%_install_langs \(.*\)/\0:fr/g' /etc/rpm/macros.image-language-conf ||:) \
     && dnf install -y systemd \

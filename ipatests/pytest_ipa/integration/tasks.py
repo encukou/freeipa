@@ -1396,7 +1396,7 @@ def two_connected_topo(master, replicas):
             i += 1
 
     except IndexError:
-        return
+        pass
 
 
 @_topo('double-circle')
