@@ -2,6 +2,7 @@
 # Copyright (C) 2015  FreeIPA Contributors see COPYING for license
 #
 
+import logging
 import re
 
 from ipalib import api, Bool, Str
@@ -9,11 +10,13 @@ from ipalib.plugable import Registry
 from .baseldap import (
     LDAPObject, LDAPSearch, LDAPCreate,
     LDAPDelete, LDAPUpdate, LDAPRetrieve)
+from .virtual import VirtualCommand
 from ipalib.request import context
 from ipalib import ngettext
 from ipalib.text import _
 from ipapython.dogtag import INCLUDED_PROFILES
 from ipapython.version import API_VERSION
+from ipapython.dn import DN
 
 from ipalib import errors
 
@@ -70,6 +73,8 @@ The following restrictions apply to profiles managed by IPA:
   class must be used.
 
 """)
+
+logger = logging.getLogger(__name__)
 
 
 register = Registry()
@@ -184,15 +189,48 @@ class certprofile(LDAPObject):
 
 
 @register()
-class certprofile_find(LDAPSearch):
+class certprofile_find(LDAPSearch, VirtualCommand):
     __doc__ = _("Search for Certificate Profiles.")
     msg_summary = ngettext(
         '%(count)d profile matched', '%(count)d profiles matched', 0
     )
 
+    operation = "list all profiles"
+
     def execute(self, *args, **kwargs):
         ca_enabled_check(self.api)
-        return super(certprofile_find, self).execute(*args, **kwargs)
+        result = super(certprofile_find, self).execute(*args, **kwargs)
+
+        if len(args) == 0:
+            try:
+                self.check_access()
+            except errors.ACIError:
+                logger.debug("Virtual request for profiles failed")
+            else:
+                with self.api.Backend.ra_certprofile as profile_api:
+                    profiles = profile_api.list_profiles()
+
+                ipa_list = []
+                for entry in result['result']:
+                    ipa_list.append(entry['cn'][0])
+
+                for entry in profiles:
+                    if entry['profile_id'] in ipa_list:
+                        continue
+                    new = {
+                        # We don't have a DN for profiles that come from the CA
+                        # so fill something in so all the entries contain the
+                        # same set of attributes.
+                        'dn': DN('cn={}'.format(entry['profile_id'])),
+                        'cn': [entry['profile_id']],
+                        'description': [entry['profile_name']],
+                        'ipacertprofilestoreissued': [False],
+                    }
+                    result['result'].append(new)
+
+        result['count'] = len(result['result'])
+
+        return result
 
 
 @register()

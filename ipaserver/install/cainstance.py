@@ -1836,18 +1836,8 @@ def update_authority_entry(cert):
     return __update_entry_from_cert(make_filter, make_entry, cert)
 
 
-def get_ca_renewal_nickname(subject_base, ca_subject_dn, sdn):
-    """
-    Get the nickname for storage in the cn_renewal container.
-
-    :param subject_base: Certificate subject base
-    :param ca_subject_dn: IPA CA subject DN
-    :param sdn: Subject DN
-    :return: string, or None if nickname cannot be determined.
-
-    """
-    assert isinstance(sdn, DN)
-    nickname_by_subject_dn = {
+def get_nickname_by_subject_dn(subject_base, ca_subject_dn):
+    return {
         DN(ca_subject_dn): 'caSigningCert cert-pki-ca',
         DN('CN=CA Audit', subject_base): 'auditSigningCert cert-pki-ca',
         DN('CN=OCSP Subsystem', subject_base): 'ocspSigningCert cert-pki-ca',
@@ -1859,6 +1849,22 @@ def get_ca_renewal_nickname(subject_base, ca_subject_dn, sdn):
             'storageCert cert-pki-kra',
         DN('CN=IPA RA', subject_base): 'ipaCert',
     }
+
+
+def get_ca_renewal_nickname(subject_base, ca_subject_dn, sdn):
+    """
+    Get the nickname for storage in the cn_renewal container.
+
+    :param subject_base: Certificate subject base
+    :param ca_subject_dn: IPA CA subject DN
+    :param sdn: Subject DN
+    :return: string, or None if nickname cannot be determined.
+
+    """
+    assert isinstance(sdn, DN)
+    nickname_by_subject_dn = get_nickname_by_subject_dn(
+        subject_base, ca_subject_dn
+    )
     return nickname_by_subject_dn.get(sdn)
 
 

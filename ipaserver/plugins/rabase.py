@@ -132,3 +132,19 @@ class rabase(Backend):
                      when the CRL has been generated
         """
         raise errors.NotImplementedError(name='%s.updateCRL' % self.name)
+
+    def approve_request(self, request_id):
+        """
+        Approve a certificate signing request.
+
+        :param request_id: request ID
+        """
+        raise errors.NotImplementedError(name='%s.approve_request' % self.name)
+
+    def list_profiles(self, size):
+        """
+        Return the list of available profiles from the CA.
+
+        :param size: the maximum number of profiles to return
+        """
+        raise errors.NotImplementedError(name='%s.list_profiles' % self.name)

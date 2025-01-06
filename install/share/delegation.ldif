@@ -232,6 +232,7 @@ objectClass: groupofnames
 objectClass: ipapermission
 cn: Retrieve Certificates from the CA
 member: cn=Certificate Administrators,cn=privileges,cn=pbac,$SUFFIX
+member: cn=ipaservers,cn=hostgroups,cn=accounts,$SUFFIX
 
 dn: $SUFFIX
 changetype: modify
@@ -307,6 +308,32 @@ dn: $SUFFIX
 changetype: modify
 add: aci
 aci: (targetattr = "objectclass")(target = "ldap:///cn=certificate remove hold,cn=virtual operations,cn=etc,$SUFFIX" )(version 3.0 ; acl "permission:Certificate Remove Hold"; allow (write) groupdn = "ldap:///cn=Certificate Remove Hold,cn=permissions,cn=pbac,$SUFFIX";)
+
+dn: cn=List all profiles from the CA,cn=permissions,cn=pbac,$SUFFIX
+changetype: add
+objectClass: top
+objectClass: groupofnames
+objectClass: ipapermission
+cn: List all profiles from the CA
+member: cn=ipaservers,cn=hostgroups,cn=accounts,$SUFFIX
+
+dn: $SUFFIX
+changetype: modify
+add: aci
+aci: (targetattr = "objectclass")(target = "ldap:///cn=list all profiles,cn=virtual operations,cn=etc,$SUFFIX" )(version 3.0 ; acl "permission:List all profiles from the CA" ; allow (write) groupdn = "ldap:///cn=List all profiles from the CA,cn=permissions,cn=pbac,$SUFFIX";)
+
+dn: cn=Approve certificate requests,cn=permissions,cn=pbac,$SUFFIX
+changetype: add
+objectClass: top
+objectClass: groupofnames
+objectClass: ipapermission
+cn: Approve certificate requests
+member: cn=ipaservers,cn=hostgroups,cn=accounts,$SUFFIX
+
+dn: $SUFFIX
+changetype: modify
+add: aci
+aci: (targetattr = "objectclass")(target = "ldap:///cn=certificate approve,cn=virtual operations,cn=etc,$SUFFIX" )(version 3.0 ; acl "permission:Approve certificate requests" ; allow (write) groupdn = "ldap:///cn=Approve certificate requests,cn=permissions,cn=pbac,$SUFFIX";)
 
 dn: cn=External IdP server Administrators,cn=privileges,cn=pbac,$SUFFIX
 changetype: add
