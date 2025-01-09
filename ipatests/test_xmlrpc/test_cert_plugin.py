@@ -31,6 +31,7 @@ from ipalib import errors
 from ipaplatform.paths import paths
 from ipapython.certdb import NSSDatabase
 from ipapython.dn import DN
+from ipapython import dogtag
 from ipapython.ipautil import run
 from ipatests.test_xmlrpc.testcert import subject_base
 from ipatests.test_xmlrpc.xmlrpc_test import XMLRPC_test
@@ -263,6 +264,38 @@ class test_cert(BaseCert):
         """
         res = api.Command['cert_find'](all=True)
         assert 'count' in res and res['count'] >= 10
+
+    def test_00013_cert_approve(self):
+        """
+        Negative test that approving a non-existent request fails gracefully.
+        """
+        with pytest.raises(errors.NotFound):
+            api.Command['cert_approve']('1')
+
+    def test_00014_cert_approve(self):
+        """
+        Negative test that cert requests for CA profiles fails because the
+        request is coming as admin and not as an IPA server host
+        principal.
+        """
+        csr = self.generateCSR(str(self.subject))
+        for profile in (
+            dogtag.OCSP_PROFILE,
+            dogtag.SUBSYSTEM_PROFILE,
+            dogtag.AUDIT_PROFILE,
+            dogtag.CACERT_PROFILE,
+            dogtag.CASERVER_PROFILE,
+            dogtag.KRA_AUDIT_PROFILE,
+            dogtag.KRA_STORAGE_PROFILE,
+            dogtag.KRA_TRANSPORT_PROFILE
+        ):
+            with pytest.raises(errors.NotFound):
+                api.Command['cert_request'](
+                    csr,
+                    profile_id=profile,
+                    principal=self.service_princ,
+                    add=True
+                )
 
     def test_99999_cleanup(self):
         """

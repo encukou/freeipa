@@ -58,7 +58,11 @@ def get_certmonger_request_value(host, requestid, state):
     for line in request_file.split('\n'):
         if line.startswith('%s=' % state):
             _unused, val = line.partition("=")[::2]
-            break
+        elif val:
+            if line.startswith(' '):
+                val += '\n' + line[1:]
+            else:
+                break
     return val
 
 
@@ -637,3 +641,114 @@ class TestCAShowErrorHandling(IntegrationTest):
             os.path.join(paths.OPENSSL_CERTS_DIR, 'test.pem'),
             os.path.join(paths.OPENSSL_PRIVATE_DIR, 'test.key')
         ])
+
+
+class TestCertificateApproval(IntegrationTest):
+    num_replicas = 0
+    csr_file = None
+
+    @classmethod
+    def install(cls, mh):
+        tasks.install_master(cls.master)
+
+        # The CA subsystem certs probably don't have a CSR so re-issue it
+        # using certmonger to generate one.
+        result = cls.master.run_command(
+            ['getcert', 'resubmit', '-d', '/etc/pki/pki-tomcat/alias',
+             '-n', 'ocspSigningCert cert-pki-ca']
+        )
+        request_id = re.findall(r'\d+', result.stdout_text)
+        status = tasks.wait_for_request(cls.master, request_id[0], 50)
+        assert status == "MONITORING"
+
+        # Now we can retrieve the CSR and resubmit manually
+        rawcsr = get_certmonger_request_value(cls.master, request_id[0], "csr")
+
+        # convert the CSR to a single line the way IPA requires
+        tmp = rawcsr.split('\n')
+        csr = ''.join(tmp[1:-1])
+
+        cls.csr_file = tasks.create_temp_file(cls.master, directory=paths.TMP)
+        cls.master.put_file_contents(cls.csr_file, csr)
+
+    def test_manual_approval(self):
+        """Manually request a certificate for a CA subsystem as an IPA
+           server and then approve it. This mimics what certmonger does.
+        """
+
+        self.master.run_command(
+            "kinit -kt /etc/krb5.keytab host/%s" % self.master.hostname)
+        result = self.master.run_command(['ipa', 'cert-request', self.csr_file,
+                                          '--principal', "host/%s@%s" % (
+                                              self.master.hostname,
+                                              self.master.domain.realm),
+                                          '--profile-id', 'caOCSPCert',
+                                          '--raw',],
+                                         raiseonerr=False)
+        assert result.returncode == 0
+
+        rval = {}
+        for line in result.stdout_text.split('\n'):
+            line = line.strip()
+            if line:
+                if ':' not in line:
+                    continue
+                k, v = line.split(':', 1)
+                rval.setdefault(k.lower(), v)
+
+        request_id = rval['request_id']
+
+        result = self.master.run_command(['ipa', 'cert-approve', request_id],
+                                         raiseonerr=False)
+        assert result.returncode == 0
+
+    def test_manual_admin_approval(self):
+        """Manually request a certificate for a CA subsystem as an IPA
+           server and then approve it as admin. This will validate that
+           the permission delegation works beyond IPA servers.
+        """
+
+        self.master.run_command(
+            "kinit -kt /etc/krb5.keytab host/%s" % self.master.hostname)
+        result = self.master.run_command(['ipa', 'cert-request', self.csr_file,
+                                          '--principal', "host/%s@%s" % (
+                                              self.master.hostname,
+                                              self.master.domain.realm),
+                                          '--profile-id', 'caOCSPCert',
+                                          '--raw',],
+                                         raiseonerr=False)
+        assert result.returncode == 0
+
+        rval = {}
+        for line in result.stdout_text.split('\n'):
+            line = line.strip()
+            if line:
+                if ':' not in line:
+                    continue
+                k, v = line.split(':', 1)
+                rval.setdefault(k.lower(), v)
+
+        request_id = rval['request_id']
+
+        tasks.kinit_admin(self.master)
+
+        result = self.master.run_command(['ipa', 'cert-approve', request_id],
+                                         raiseonerr=False)
+        assert result.returncode == 0
+
+    def test_admin_request_failure(self):
+        """Manually request a certificate for a CA subsystem server as
+           admin. This should fail because only an IPA host can request
+           CA/KRA profiles.
+        """
+        tasks.kinit_admin(self.master)
+
+        result = self.master.run_command(['ipa', 'cert-request', self.csr_file,
+                                          '--principal', "host/%s@%s" % (
+                                              self.master.hostname,
+                                              self.master.domain.realm),
+                                          '--profile-id', 'caOCSPCert',
+                                          '--raw',],
+                                         raiseonerr=False)
+        assert result.returncode == 2
+        assert 'Certificate not requested from a host' in result.stderr_text
