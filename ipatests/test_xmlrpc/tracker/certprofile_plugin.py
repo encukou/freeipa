@@ -21,7 +21,8 @@ class CertprofileTracker(Tracker):
     """
 
     retrieve_keys = {
-        'dn', 'cn', 'description', 'ipacertprofilestoreissued'
+        'dn', 'cn', 'description', 'ipacertprofilestoreissued',
+        'ipacertprofilelocal',
     }
     retrieve_all_keys = retrieve_keys | {'objectclass'}
     create_keys = retrieve_keys | {'objectclass'}
@@ -30,12 +31,13 @@ class CertprofileTracker(Tracker):
     allowedto_keys = retrieve_keys
 
     def __init__(self, name, store=False, desc='dummy description',
-                 profile=None, default_version=None):
+                 profile=None, default_version=None, local=True):
         super(CertprofileTracker, self).__init__(
             default_version=default_version
         )
 
         self.store = store
+        self.local = local
         self.description = desc
         self._profile_path = profile
 
@@ -87,6 +89,7 @@ class CertprofileTracker(Tracker):
             cn=[self.name],
             description=[self.description],
             ipacertprofilestoreissued=[self.store],
+            ipacertprofilelocal=[self.local],
             objectclass=objectclasses.certprofile
         )
         self.exists = True
