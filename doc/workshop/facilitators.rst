@@ -26,10 +26,3 @@ workshop helped them learn FreeIPA, how difficult it was, etc.
 
 Example: https://goo.gl/forms/UOkcsVROqV
 
-
-Vagrant boxes
--------------
-
-See :ref:`building` for instructions on building Vagrant boxes.
-At time of writing, the ``freeipa/freeipa-workshop`` box is
-FreeIPA 4.9.3 / Fedora 34, for the VirtualBox and libvirt providers.

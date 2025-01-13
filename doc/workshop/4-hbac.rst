@@ -52,8 +52,14 @@ List the existing HBAC rules::
     Service category: all
     Description: Allow all users to access any host from any host
     Enabled: TRUE
+
+    Rule name: allow_systemd-user
+    User category: all
+    Host category: all
+    Description: Allow pam_systemd to run user@.service to create a system user session
+    Enabled: True
   ----------------------------
-  Number of entries returned 1
+  Number of entries returned 2
   ----------------------------
 
 The FreeIPA server is installed with a single default ``allow_all``

@@ -1,6 +1,6 @@
 .. _workshop:
 
-  Copyright 2015, 2016  Red Hat, Inc.
+  Copyright 2015-2025 Red Hat, Inc.
 
   This work is licensed under the Creative Commons Attribution 4.0
   International License. To view a copy of this license, visit
@@ -45,17 +45,15 @@ Optional units—choose the topics that are relevant to you:
 Editing files on VMs
 --------------------
 
-Parts of the workshop involve editing files on virtual
-machines.  The ``vi`` and GNU ``nano`` editors are available on the
-VMs.  If you are not familiar with ``vi`` or you are unsure of what to use, you
-should choose ``nano``.
+Parts of the workshop involve editing files on virtual hosts.
+The ``vi`` and GNU ``nano`` editors are available on the containers.
 
 
 Example commands
 ----------------
 
 This guide contains many examples of commands.  Some of the commands
-should be executed on your host, others on a particular guest VM.
+should be executed on your host, others on a particular guest.
 For clarity, commands are annotated with the host on which they are
 meant to be executed, as in these examples::
 
@@ -72,135 +70,77 @@ Preparation
 ===========
 
 Some preparation is needed prior to the workshop.  The workshop is
-designed to be carried out in a Vagrant_ environment that configures
-three networked virtual machines (VMs) with all software needed for
-the workshop.  **The goal of this preparation** is to ``vagrant up``
-the VMs.  After this preparation is completed you are ready to begin
-the workshop.
-
-.. _Vagrant: https://www.vagrantup.com/
+designed to be carried out in a container environment that configures
+three networked hosts with all software needed for the workshop.
+**The goal of this preparation** is to have the environment running
+and ready to begin the workshop.
 
 
 Requirements
 ------------
 
-For the FreeIPA workshop you will need to:
+For the FreeIPA workshop you will need to use:
 
-- Install **Vagrant** and **VirtualBox**. (On Fedora, you can use **libvirt**
-  instead of VirtualBox).
+- ``git`` to clone the workshop repository
 
-- Use Git to clone the repository containing the ``Vagrantfile``
+- ``ipalab-config`` to generate the configuration for the containers
 
-- Fetch the Vagrant *box* for the workshop
+- ``podman`` and ``podman-compose`` compose to control the containers
 
-- Add entries for the guest VMs to your hosts file (so you can
-  access them by their hostname)
+You'll also need Internet connection to download the container images.
 
-Please set up these items **prior to the workshop**.  More detailed
-instructions follow.
+Please set up these items **prior to the workshop**. Detailed instructions
+for different platforms follow.
 
 
-Install Vagrant and VirtualBox
-------------------------------
+Starting the workshop environment
+---------------------------------
 
-Fedora
-^^^^^^
+Linux
+^^^^^
 
-If you intend to use the ``libvirt`` provider (recommended), install
-``vagrant-libvirt`` and ``vagrant-libvirt-doc``::
+On most modern Linux environments, ``python`` and ``pip`` are already
+available. If not, use your prefered package manager to install both.
 
-  $ sudo dnf install -y vagrant-libvirt vagrant-libvirt-doc
+The other tools you may install through your package manager are ``podman``
+and ``podman-compose``. As an alternative, both can be installed within a
+Python virtual environment, as seen later.
 
-Also ensure you have the latest versions of ``selinux-policy`` and
-``selinux-policy-targeted``.
-
-Allow your regular user ID to start and stop Vagrant boxes using ``libvirt``.
-Add your user to ``libvirt`` group so you don't need to enter your administrator
-password everytime::
-
-  $ sudo gpasswd -a ${USER} libvirt
-  $ newgrp libvirt
-
-Finally restart the services::
-
-  $ systemctl restart libvirtd
-
-More information: https://docs.fedoraproject.org/en-US/quick-docs/getting-started-with-virtualization/
-
-Otherwise, you will use VirtualBox and the ``virtualbox`` provider.
-VirtualBox needs to build kernel modules, and that means that you must
-first install kernel headers and Dynamic Kernel Module Support::
-
-  $ sudo dnf install -y vagrant kernel-devel dkms
-
-Next, install VirtualBox from the official VirtualBox package repository.
-Before using the repo, check that its contents match what appears
-in the transcript below (to make sure it wasn't tampered with)::
-
-  $ sudo curl -o /etc/yum.repos.d/virtualbox.repo \
-    http://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo
-
-  $ cat /etc/yum.repos.d/virtualbox.repo
-  [virtualbox]
-  name=Fedora $releasever - $basearch - VirtualBox
-  baseurl=http://download.virtualbox.org/virtualbox/rpm/fedora/$releasever/$basearch
-  enabled=1
-  gpgcheck=1
-  repo_gpgcheck=1
-  gpgkey=https://www.virtualbox.org/download/oracle_vbox.asc
-
-  $ sudo dnf install -y VirtualBox-6.1
-
-Finally, load the kernel modules (you may need to restart your system for this to work)::
-
-  $ sudo modprobe vboxdrv vboxnetadp
+See https://podman.io/docs/installation#installing-on-linux for
+instructions on installing ``podman`` on several Linux distributions.
 
 
-Mac OS X
-^^^^^^^^
+macOS and Windows
+^^^^^^^^^^^^^^^^^
 
-Install Vagrant for Mac OS X from
-https://www.vagrantup.com/downloads.html.
+Follow the instructions to install ``podman`` from found at
+https://podman.io/docs/installation
 
-Install VirtualBox 6.1 for **OS X hosts** from
-https://www.virtualbox.org/wiki/Downloads.
+Running containers on macOS and Windows requires a virtual macine
+running Linux to host the containers. ``podman`` makes the use of
+this virtual machine nearly transparent.
 
-Install Git from https://git-scm.com/download/mac or via your
-preferred package manager.
+The default virtual machine do not provide enough memory to run the
+workshop environment. Create a new virtual machine with::
 
+   $ podman machine init --memory 4096 ipa-workshop
+   $ podman machine start ipa-workshop
 
-Debian / Ubuntu
-^^^^^^^^^^^^^^^
+Using 4GB of memory for the underlying virtual machine is close to the
+minimum possible. The used memory for the containers right after the
+deployment is around 2.5GB, and it does not take into account any usage
+spike. If you have 16GB or more of RAM on your Mac machine, use, at
+least, 6GB (``--memory 6144``) for the podman machine.
 
-Install Vagrant, Git and VirtualBox::
-
-  $ sudo apt-get install -y vagrant git
-  $ sudo apt-get install -y virtualbox-6.1
-
-If VirtualBox 6.1 was not available in the official packages for
-your release, follow the instructions at
-https://www.virtualbox.org/wiki/Linux_Downloads to install it.
-
-
-Windows
-^^^^^^^
-
-Install Vagrant via the ``.msi`` available from
-https://www.vagrantup.com/downloads.html.
-
-Install VirtualBox for **Windows hosts** from
-https://www.virtualbox.org/wiki/Downloads.
-
-You will also need to install an SSH client, and Git.  Git for
-Windows also comes with an SSH client so just install Git from
-https://git-scm.com/download/win.
+After this setup, test your ``podman`` environment by running
+``podman run hello``.
 
 
 Clone this repository
 ---------------------
 
-This repository contains the ``Vagrantfile`` that is used for the
-workshop, which you will need locally.
+This repository contains the base configuration files to generate the
+workshop environment, which you will need locally.
 
 ::
 
@@ -208,35 +148,52 @@ workshop, which you will need locally.
   $ cd freeipa/doc/workshop
 
 
-Fetch Vagrant box
------------------
+Create and run the container compose
+------------------------------------
 
-Please fetch the Vagrant box prior to the workshop.  It is > 700MB
-so it may not be feasible to download it during the workshop.
+To be able to run the workshop environment, you'll have to install some
+tools, and you can  isolate your environment form the one used for the
+workshop, by creating and activating a Python environment::
 
-::
+  $ python3 -m venv /tmp/ipa-workshop
+  $ source /tmp/ipa-workshop/bin/activate
 
-  $ vagrant box add freeipa/freeipa-workshop
 
+Within the virtual environment, install the tools used to create and run
+the container compose with::
 
-Add hosts file entries
-----------------------
+  $ pip install -r requirements.txt
 
-*This step is optional.  All units can be completed using the CLI
-only.  But if you want to access the FreeIPA Web UI or other web
-servers on the VMs from your browser, follow these instructions.*
+Now generate the workshop configuration environment dy issuing::
 
-Add the following entries to your hosts file::
+  $ ipalab-config ipa-workshop.yaml
 
-  192.168.33.10   server.ipademo.local
-  192.168.33.11   replica.ipademo.local
-  192.168.33.20   client.ipademo.local
+Create a virtual network for the workshop::
 
-On Unix systems (including Mac OS X), the hosts file is ``/etc/hosts``
-(you need elevated permissions to edit it.)
+  $ podman network create \
+        --disable-dns \
+        --subnet "192.168.33.0/24" \
+        ipanet-workshop
 
-On Windows, edit ``C:\Windows\System32\system\drivers\etc\hosts`` as
-*Administrator*.
+Start the container compose::
+
+  $ cd ipa-workshop-lab
+  $ podman-compose up -d
+
+Add the host entries to your host's '/etc/hosts' file with::
+
+  $ sudo bash -c "cat hosts >> /etc/hosts"
+
+If you prefer to do it manually, these are the required entries::
+
+  192.168.33.2  server.ipademo.local
+  192.168.33.3  replica.ipademo.local
+  192.168.33.4  client.ipademo.local
+
+Once you are done with the workshop, form the lab folder, you can
+shutdown the environment with::
+
+  $ podman-compose down
 
 
 Next step

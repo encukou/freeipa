@@ -3,12 +3,21 @@
 Unit 3: User management and Kerberos authentication
 =====================================================
 
-This unit introduces the ``ipa`` CLI program and the web
-interface.  We will perform some simple administrative tasks: adding
-groups and users and managing group membership.
+This unit introduces the ``ipa`` CLI program and the web interface.
+We will perform some simple administrative tasks: adding groups and
+users and managing group membership.
+
 
 Web UI
-------
+-------
+
+Before being able to access the WebUI, you need to add a profile to your
+Firefox configuration. From the workshop folder run ``firefox-profile.sh``
+to add the configuration to your user. If you want to remove this
+configuration later, use ``firefox-profile.sh clean``.
+
+To visit any workshop related url use ``start-firefox.sh <URL>``. This will
+allow the URL in the containers to be accessed from the host.
 
 Visit ``https://server.ipademo.local/``.  You'll get a TLS
 *untrusted issuer* warning which you can dismiss (by adding a temporary
@@ -57,7 +66,7 @@ You can read a general overview of a topic by running ``ipa help
 <topic>``, and specific information on a particular command by
 running ``ipa help <command>``.
 
-Add a user named ``bob`` from the CLI.  Use the CLI help to find the
+Add a user named ``bob`` from the CLI. Use the CLI help to find the
 right command (**hint**: the ``user`` plugin provides the command).
 
 

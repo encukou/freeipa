@@ -2,9 +2,9 @@
 sudo systemctl enable haveged
 sudo sh -c "echo 'PS1=\"[\u@\h]\\\\$ \"' >> /etc/profile"
 sudo sh -c "echo 'PS1=\"[\h]\\\\$ \"' >> /etc/bashrc"
-sudo sh -c "echo '192.168.33.10 server.ipademo.local' >> /etc/hosts"
-sudo sh -c "echo '192.168.33.11 replica.ipademo.local' >> /etc/hosts"
-sudo sh -c "echo '192.168.33.20 client.ipademo.local' >> /etc/hosts"
+sudo sh -c "echo '192.168.33.2 server.ipademo.local' >> /etc/hosts"
+sudo sh -c "echo '192.168.33.3 replica.ipademo.local' >> /etc/hosts"
+sudo sh -c "echo '192.168.33.4 client.ipademo.local' >> /etc/hosts"
 sudo rm -f /etc/httpd/conf.d/welcome.conf
 
 sudo sh -c "cat >/usr/share/httpd/app.py" <<EOF
@@ -36,12 +36,3 @@ sudo sh -c "cat >/etc/httpd/conf.d/app.conf" <<EOF
     </Directory>
 </VirtualHost>
 EOF
-
-# Vagrant's "change host name" sets the short host name.  Before
-# we repair /etc/hosts (see below) let's reset /etc/hostname to
-# the *full* host name
-hostname --fqdn > /etc/hostname && hostname -F /etc/hostname
-
-# Vagrant's "change host name" capability for Fedora maps hostname
-# to loopback.  We must repair /etc/hosts
-sed -ri 's/127\.0\.0\.1\s.*/127.0.0.1 localhost localhost.localdomain/' /etc/hosts
