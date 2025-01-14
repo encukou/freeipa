@@ -249,7 +249,10 @@ def delete_ca_cert(ldap, base_dn, cert):
     entry['ipaCertIssuerSerial'].remove(issuer_serial)
     entry['cACertificate;binary'].remove(cert)
 
-    ldap.update_entry(entry)
+    if len(entry['ipaCertIssuerSerial']) == 0:
+        ldap.delete_entry(entry.dn)
+    else:
+        ldap.update_entry(entry)
 
 
 def put_ca_cert(ldap, base_dn, cert, nickname, trusted=None,

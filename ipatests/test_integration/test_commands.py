@@ -901,6 +901,12 @@ class TestIPACommand(IntegrationTest):
                 paths.IPA_CACERT_MANAGE,
                 'install',
                 filename])
+        # remove the subject of good_pkcs7 we just added to avoid
+        # future failures.
+        self.master.run_command([
+            paths.IPA_CACERT_MANAGE,
+            'delete',
+            'CN=Certificate Authority,O=EXAMPLE.COM'])
 
         for contents in (badcert,):
             self.master.put_file_contents(filename, contents)
@@ -1234,7 +1240,7 @@ class TestIPACommand(IntegrationTest):
             raiseonerr=False
         )
         assert result.returncode != 0
-        assert "Verifying \'%s\' failed. Removing part of the " \
+        assert "Verifying removal of \'%s\' failed. Removing part of the " \
                "chain? certutil: certificate is invalid: Peer's " \
                "Certificate issuer is not recognized." \
                % isrgrootx1_nick in result.stderr_text
@@ -1614,29 +1620,6 @@ class TestIPACommand(IntegrationTest):
         assert result.returncode == 1
         assert 'cannot be deleted or disabled' in result.stderr_text
 
-    def test_ipa_cacert_manage_prune(self):
-        """Test for ipa-cacert-manage prune"""
-
-        certfile = os.path.join(self.master.config.test_dir, 'cert.pem')
-        self.master.put_file_contents(certfile, isrgrootx1)
-        result = self.master.run_command(
-            [paths.IPA_CACERT_MANAGE, 'install', certfile])
-
-        certs_before_prune = self.master.run_command(
-            [paths.IPA_CACERT_MANAGE, 'list'], raiseonerr=False
-        ).stdout_text
-
-        assert isrgrootx1_nick in certs_before_prune
-
-        # Jump in time to make sure the cert is expired
-        self.master.run_command(['date', '-s', '+15Years'])
-        result = self.master.run_command(
-            [paths.IPA_CACERT_MANAGE, 'prune'], raiseonerr=False
-        ).stdout_text
-        self.master.run_command(['date', '-s', '-15Years'])
-
-        assert isrgrootx1_nick in result
-
     def test_ipa_cacert_manage_duplicate_certsubject(self):
         """Test for ipa-cacert-manage install with duplicated
            certificate subjects. This relies on the behavior
@@ -1698,6 +1681,32 @@ class TestIPACommand(IntegrationTest):
 
         assert f"{interm_nick}  {intermediate_serial}" not in certs
         assert f"{interm_nick}  {duplicate_serial}" in certs
+
+    def test_ipa_cacert_manage_prune(self):
+        """Test for ipa-cacert-manage prune
+
+           This twiddles with time so should be run last in the class.
+        """
+
+        certfile = os.path.join(self.master.config.test_dir, 'cert.pem')
+        self.master.put_file_contents(certfile, isrgrootx1)
+        result = self.master.run_command(
+            [paths.IPA_CACERT_MANAGE, 'install', certfile])
+
+        certs_before_prune = self.master.run_command(
+            [paths.IPA_CACERT_MANAGE, 'list'], raiseonerr=False
+        ).stdout_text
+
+        assert isrgrootx1_nick in certs_before_prune
+
+        # Jump in time to make sure the cert is expired
+        self.master.run_command(['date', '-s', '+15Years'])
+        result = self.master.run_command(
+            [paths.IPA_CACERT_MANAGE, 'prune'], raiseonerr=False
+        ).stdout_text
+        self.master.run_command(['date', '-s', '-15Years'])
+
+        assert isrgrootx1_nick in result
 
 
 class TestIPACommandWithoutReplica(IntegrationTest):

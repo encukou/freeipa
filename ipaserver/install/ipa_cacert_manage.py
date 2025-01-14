@@ -535,6 +535,10 @@ class CACertManage(admintool.AdminTool):
             loaded = tmpdb.list_certs()
             logger.debug("loaded raw certs '%s'", loaded)
 
+            if not options.serial:
+                for nickname in nicknames:
+                    tmpdb.delete_cert(nickname)
+
             for ca_nickname, _trust_flags in loaded:
                 if ca_nickname in nicknames:
                     continue
@@ -545,8 +549,8 @@ class CACertManage(admintool.AdminTool):
                 try:
                     tmpdb.verify_ca_cert_validity(ca_nickname)
                 except ValueError as e:
-                    msg = "Verifying \'%s\' failed. Removing part of the " \
-                          "chain? %s" % (nickname, e)
+                    msg = "Verifying removal of \'%s\' failed. Removing " \
+                          "part of the chain? %s" % (nickname, e)
                     if options.force:
                         print(msg)
                         continue
@@ -579,13 +583,13 @@ class CACertManage(admintool.AdminTool):
             if ca_cert.not_valid_after_utc < now:
                 expired_certs.append(ca_nickname)
 
-
+        del_options = self.options
+        del_options.force = True
         if expired_certs:
-            self._delete_by_nickname(expired_certs, self.options)
-
             print("Expired certificates deleted:")
-            for nickname in expired_certs:
-                print(nickname)
+            for ca_cert in expired_certs:
+                self._delete_by_nickname([ca_cert], del_options)
+                print(ca_cert)
             print("Run ipa-certupdate on enrolled machines to apply changes.")
         else:
             print("No certificates were deleted")
