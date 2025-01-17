@@ -855,19 +855,34 @@ class DsInstance(service.Service):
             # rewrite the pin file with current password
             dsdb.create_pin_file()
             if self.master_fqdn is None:
-                ca_args = [
-                    paths.CERTMONGER_DOGTAG_SUBMIT,
-                    '--ee-url', 'https://%s:8443/ca/ee/ca' % self.fqdn,
-                    '--certfile', paths.RA_AGENT_PEM,
-                    '--keyfile', paths.RA_AGENT_KEY,
-                    '--cafile', paths.IPA_CA_CRT,
-                    '--agent-submit'
-                ]
-                helper = " ".join(ca_args)
-                prev_helper = certmonger.modify_ca_helper('IPA', helper)
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    tmpdb = certs.CertDB(api.env.realm, nssdir=tmpdir)
+                    tmpdb.create_from_cacert()
+                    keyfile = os.path.join(tmpdb.secdir, "key.pem")
+                    certfile = os.path.join(tmpdb.secdir, "cert.pem")
+                    tmpdb.pki_issue_certificate(
+                        "ldap", dogtag.DEFAULT_PROFILE,
+                        str(DN(('CN', self.fqdn), self.subject_base)),
+                        keyfile, certfile
+                    )
+
+                    ipautil.run(
+                        [paths.OPENSSL, 'pkcs12', '-export',
+                         '-in', certfile,
+                         '-out', os.path.join(tmpdb.secdir, 'server.p12'),
+                         '-inkey', keyfile,
+                         '-password', 'file:{}'.format(tmpdb.passwd_fname),
+                         '-name', 'Server-Cert',
+                         '-keypbe', 'AES-256-CBC',
+                         '-certpbe', 'AES-256-CBC',
+                         '-macalg', 'sha384',]
+                    )
+                    with open(tmpdb.passwd_fname, "r") as fd:
+                        key_password = fd.read()
+                    dsdb.import_pkcs12(
+                        os.path.join(tmpdb.secdir, 'server.p12'), key_password
+                    )
             else:
-                prev_helper = None
-            try:
                 cmd = 'restart_dirsrv %s' % self.serverid
                 certmonger.request_and_wait_for_cert(
                     certpath=dirname,
@@ -882,18 +897,14 @@ class DsInstance(service.Service):
                     post_command=cmd,
                     resubmit_timeout=api.env.certmonger_wait_timeout
                 )
-            finally:
-                if prev_helper is not None:
-                    certmonger.modify_ca_helper('IPA', prev_helper)
 
-            # restart_dirsrv in the request above restarts DS, reconnect ldap2
             api.Backend.ldap2.disconnect()
             api.Backend.ldap2.connect()
 
             self.cert = dsdb.get_cert_from_db(self.nickname)
-
-            if prev_helper is not None:
-                self.add_cert_to_service()
+            self.add_cert_to_service()
+            if self.master_fqdn is None:
+                self.start_tracking_certificates(self.serverid)
 
         self.cacert_name = dsdb.cacert_name
 

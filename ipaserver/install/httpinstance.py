@@ -366,25 +366,24 @@ class HTTPInstance(service.Service):
                 self.start_tracking_certificates()
 
             self.add_cert_to_service()
-
         else:
             if not self.promote:
-                ca_args = [
-                    paths.CERTMONGER_DOGTAG_SUBMIT,
-                    '--ee-url', 'https://%s:8443/ca/ee/ca' % self.fqdn,
-                    '--certfile', paths.RA_AGENT_PEM,
-                    '--keyfile', paths.RA_AGENT_KEY,
-                    '--cafile', paths.IPA_CA_CRT,
-                    '--agent-submit'
-                ]
-                helper = " ".join(ca_args)
-                prev_helper = certmonger.modify_ca_helper('IPA', helper)
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    tmpdb = certs.CertDB(api.env.realm, nssdir=tmpdir)
+                    tmpdb.create_from_cacert()
+                    dns_2 = f"DNS.2={IPA_CA_RECORD}.{api.env.domain}"
+                    tmpdb.pki_issue_certificate(
+                        "HTTP", dogtag.DEFAULT_PROFILE,
+                        str(DN(('CN', self.fqdn), self.subject_base)),
+                        paths.HTTPD_KEY_FILE, paths.HTTPD_CERT_FILE,
+                        key_passwd_file, dns_2_san=dns_2
+                    )
+
+                    self.start_tracking_certificates()
             else:
-                prev_helper = None
-            try:
                 # In migration case, if CA server is older version it may not
                 # have codepaths to support the ipa-ca.$DOMAIN dnsName in HTTP
-                # cert.  Therefore if request fails, try again without the
+                # cert.  Therefore if request fails, try again without them
                 # ipa-ca.$DOMAIN dnsName.
                 args = dict(
                     certpath=(paths.HTTPD_CERT_FILE, paths.HTTPD_KEY_FILE),
@@ -405,28 +404,9 @@ class HTTPInstance(service.Service):
                     args['dns'] = [self.fqdn]  # remove ipa-ca.$DOMAIN
                     args['stop_tracking_on_error'] = False
                     certmonger.request_and_wait_for_cert(**args)
-            finally:
-                if prev_helper is not None:
-                    certmonger.modify_ca_helper('IPA', prev_helper)
-            self.cert = x509.load_certificate_from_file(
-                paths.HTTPD_CERT_FILE
-            )
 
-            if prev_helper is not None:
-                self.add_cert_to_service()
-
-            with open(paths.HTTPD_KEY_FILE, 'rb') as f:
-                priv_key = x509.load_pem_private_key(
-                    f.read(), pkey_passwd, backend=x509.default_backend())
-
-            # Verify we have a valid server cert
-            if (priv_key.public_key().public_numbers()
-                    != self.cert.public_key().public_numbers()):
-                raise RuntimeError(
-                    "The public key of the issued HTTPD service certificate "
-                    "does not match its private key.")
-
-        sysupgrade.set_upgrade_state('ssl.conf', 'migrated_to_mod_ssl', True)
+            self.cert = x509.load_certificate_from_file(paths.HTTPD_CERT_FILE)
+            self.add_cert_to_service()
 
     def configure_mod_ssl_certs(self):
         """Configure the mod_ssl certificate directives"""
