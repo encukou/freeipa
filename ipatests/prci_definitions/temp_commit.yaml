@@ -72,7 +72,7 @@ jobs:
       class: RunPytest
       args:
         build_url: '{fedora-latest/build_url}'
-        test_suite: test_integration/test_REPLACEME.py
+        test_suite: test_integration/test_commands.py::TestIPACommand::test_ipa_systemd_journal
         template: *ci-master-latest
         timeout: 3600
         topology: *master_1repl_1client
