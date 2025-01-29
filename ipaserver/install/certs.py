@@ -34,8 +34,6 @@ import fcntl
 import time
 import datetime
 
-import six
-
 from ipalib.install import certmonger, sysrestore
 from ipapython import dogtag
 from ipapython import ipautil
@@ -791,10 +789,7 @@ class _CrossProcessLock:
 
     def _read(self, fileobj):
         p = configparser.RawConfigParser()
-        if six.PY2:
-            p.readfp(fileobj)  # pylint: disable=no-member
-        else:
-            p.read_file(fileobj)
+        p.read_file(fileobj)
 
         try:
             self._locked = p.getboolean('lock', 'locked')
