@@ -24,6 +24,7 @@ from cryptography import x509
 from datetime import datetime, timedelta
 
 from ipalib.constants import IPAAPI_USER
+from ipalib.errors import DatabaseError
 
 from ipaplatform.paths import paths
 
@@ -1291,6 +1292,45 @@ class TestIPACommand(IntegrationTest):
         assert len(pkispawnlog) > 1024
         assert "DEBUG" in pkispawnlog
         assert "INFO" in pkispawnlog
+
+    def test_password_lock_ldap_logs(self):
+        """
+        Test that when a user fails LDAP authentication while in lockout
+        that it is logged.
+        """
+        user = 'ldapuser'
+        original_passwd = 'Secret123'
+        new_passwd = 'newPasswd123'
+        bad_passwd = 'foo'
+        basedn = self.master.domain.basedn
+        binddn = DN(f"uid={user},cn=users,cn=accounts,{basedn}")
+
+        tasks.kinit_admin(self.master)
+        tasks.user_add(self.master, user, password=original_passwd)
+        tasks.kinit_user(
+            self.master, user,
+            '{0}\n{1}\n{1}\n'.format(original_passwd, new_passwd)
+        )
+
+        serverid = realm_to_serverid(self.master.domain.realm)
+        log_file = '/var/log/dirsrv/slapd-{}/errors'.format(serverid)
+
+        logsize = len(self.master.get_file_contents(log_file))
+
+        # Lock out the user on master
+        for _i in range(0, 7):
+            tasks.kinit_user(self.master, user, bad_passwd, raiseonerr=False)
+
+        conn = self.master.ldap_connect()
+        try:
+            conn.simple_bind(binddn, f"{new_passwd}")
+        except DatabaseError:
+            # This is expected
+            pass
+
+        error_log = self.master.get_file_contents(log_file)[logsize:]
+
+        assert b'Too many failed authentication attempts' in error_log
 
     def test_reset_password_unlock(self):
         """
