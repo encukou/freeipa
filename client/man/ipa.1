@@ -55,6 +55,9 @@ Prompt for all parameters of \fICOMMAND\fR, even if they are optional.
 \fB\-f\fR, \fB\-\-no\-fallback\fR
 Don't fall back to other IPA servers if the default doesn't work.
 .TP
+\fB\--server\fR \fIfqdn\fR
+Specify the IPA server to connect to. Overrides the default server in \fI/etc/ipa/default.conf\fR, does not fall back to SRV if server doesn\'t reply. Requires fully-qualified domain name.
+.TP
 \fB\-v\fR, \fB\-\-verbose\fR
 Produce verbose output. A second -v pretty-prints the JSON request and response. A third \-v displays the HTTP request and response.
 .TP

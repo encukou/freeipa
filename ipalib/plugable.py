@@ -562,6 +562,15 @@ class API(ReadOnly):
             callback=config_file_callback, type='string',
             help='Load configuration from FILE.',
         )
+        parser.add_option(
+            '--server',
+            dest='server',
+            metavar='FQDN',
+            type='string',
+            help='Specify the IPA server to connect to. Overrides the default '
+            'server in /etc/ipa/default.conf, does not fall back to SRV if '
+            'server doesn\'t reply',
+        )
         parser.add_option('-d', '--debug', action='store_true',
             help='Produce full debuging output',
         )
@@ -607,10 +616,13 @@ class API(ReadOnly):
                     raise errors.OptionError(_('Unable to parse option {item}'
                                                .format(item=item)))
         for key in ('conf', 'debug', 'verbose', 'prompt_all', 'interactive',
-            'fallback', 'delegate'):
+                    'server', 'fallback', 'delegate'):
             value = getattr(options, key, None)
             if value is not None:
                 overrides[key] = value
+                if key == 'server':
+                    if getattr(options, 'fallback', None) is None:
+                        overrides['fallback'] = False
         if hasattr(options, 'prod'):
             overrides['webui_prod'] = options.prod
         if context is not None:
