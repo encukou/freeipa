@@ -290,13 +290,13 @@ In addition to providing these users and groups through the compat tree, this op
 authentication over LDAP for trusted domain users with DN under compat tree, i.e. using bind DN
 \fBuid=administrator@ad.domain,cn=users,cn=compat,$SUFFIX\fR.
 .IP
-LDAP authentication performed by the compat tree is done via PAM '\fBsystem\-auth\fR' service.
+LDAP authentication performed by the compat tree is done via PAM \fBsystem\-auth\fR service.
 This service exists by default on Linux systems and is provided by pam package as /etc/pam.d/system\-auth.
 If your IPA install does not have default HBAC rule 'allow_all' enabled, then make sure
-to define in IPA special service called '\fBsystem\-auth\fR' and create an HBAC
+to define in IPA special service called \fBsystem\-auth\fR and create an HBAC
 rule to allow access to anyone to this rule on IPA masters.
 .IP
-As '\fBsystem\-auth\fR' PAM service is not used directly by any other
+As \fBsystem\-auth\fR PAM service is not used directly by any other
 application, it is safe to use it for trusted domain users via compatibility
 path.
 
