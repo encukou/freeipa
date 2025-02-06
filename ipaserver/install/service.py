@@ -505,7 +505,7 @@ class Service:
 
         return dn
 
-    def add_cert_to_service(self):
+    def add_cert_to_service(self, append=True):
         """
         Add a certificate to a service
 
@@ -515,7 +515,10 @@ class Service:
             raise ValueError("{} has no cert".format(self.service_name))
         dn = self.get_principal_dn()
         entry = api.Backend.ldap2.get_entry(dn)
-        entry.setdefault('userCertificate', []).append(self.cert)
+        if append:
+            entry.setdefault('userCertificate', []).append(self.cert)
+        else:
+            entry['userCertificate'] = self.cert
         try:
             api.Backend.ldap2.update_entry(entry)
         except Exception as e:

@@ -1545,6 +1545,62 @@ class TestCertInstall(CALessBase):
         result = self.master.run_command(['kinit', '-n'])
         assert result.returncode == 0
 
+    # The previous install will be lost with this test
+    def test_services_are_updated(self):
+        "Test that IPA service entries get updated & old certs revoked"
+
+        tasks.uninstall_master(self.master, clean=False)
+        ipa_certs_cleanup(self.master)
+        tasks.install_master(self.master, setup_dns=False)
+
+        test_dir = self.master.config.test_dir
+        for filename in ('ca1.crt', 'ca1/server.crt'):
+            self.master.transport.put_file(
+                os.path.join(self.cert_dir, filename),
+                os.path.join(test_dir, os.path.basename(filename))
+            )
+        result = self.master.run_command(
+            ['ipa-cacert-manage', 'install',
+             os.path.join(self.master.config.test_dir,'ca1.crt')]
+        )
+        assert result.returncode == 0
+        result = self.master.run_command(['ipa-certupdate'])
+        assert result.returncode == 0
+
+        result = self.master.run_command([
+            'openssl', 'x509', '-serial', '-noout', '-in',
+            os.path.join(self.master.config.test_dir, 'server.crt')
+        ])
+        new_serial = str(int(result.stdout_text.split('=')[1].strip()))
+
+        serials = {}
+        for service in ('HTTP', 'ldap',):
+            result = self.master.run_command(
+                'ipa service-show %s/%s --raw | grep serial_number:' %
+                (service, self.master.hostname)
+            )
+            serial_number = result.stdout_text.split(':')[1].strip()
+            serials[service] = serial_number
+
+        # import pdb; pdb.set_trace()
+        for service in ('w', 'd',):
+            result = self.certinstall(service, 'ca1/server')
+            assert result.returncode == 0
+
+        for service in ('HTTP', 'ldap',):
+            result = self.master.run_command(
+                'ipa service-show %s/%s --raw | grep serial_number:' %
+                (service, self.master.hostname)
+            )
+            serial_number = result.stdout_text.split(':')[1].strip()
+            assert serial_number == new_serial
+
+            result = self.master.run_command(
+                ['ipa', 'cert-show', serials[service], '--raw']
+            )
+            assert 'revocation_reason:' in result.stdout_text
+
+
 
 def verify_kdc_cert_perms(host):
     """Verify that the KDC cert pem file has 0644 perms"""

@@ -32,7 +32,7 @@ from ipapython.dn import DN
 from ipapython import ipaldap
 from ipalib import api, errors
 from ipaserver.install import certs, dsinstance, installutils, krbinstance
-from ipaserver.install import cainstance
+from ipaserver.install import cainstance, httpinstance
 
 
 class ServerCertInstall(admintool.AdminTool):
@@ -137,6 +137,8 @@ class ServerCertInstall(admintool.AdminTool):
         api.Backend.ldap2.disconnect()
 
     def install_dirsrv_cert(self):
+        from ipaserver.plugins.service import revoke_certs
+
         serverid = ipaldap.realm_to_serverid(api.env.realm)
         dirname = dsinstance.config_dirname(serverid)
 
@@ -146,21 +148,35 @@ class ServerCertInstall(admintool.AdminTool):
                                ['nssslpersonalityssl'])
         old_cert = entry.single_value['nssslpersonalityssl']
 
-        server_cert = self.import_cert(dirname, self.options.pin,
-                                       old_cert, 'ldap/%s' % api.env.host,
-                                       'restart_dirsrv %s' % serverid)
+        nickname, cert = self.import_cert(dirname, self.options.pin,
+                                          old_cert, 'ldap/%s' % api.env.host,
+                                          'restart_dirsrv %s' % serverid)
 
-        entry['nssslpersonalityssl'] = [server_cert]
+        entry['nssslpersonalityssl'] = [nickname]
         try:
             conn.update_entry(entry)
         except errors.EmptyModlist:
             pass
+
+        ds = dsinstance.DsInstance()
+        ds.suffix = api.env.basedn
+        ds.realm = api.env.realm
+        ds.fqdn = api.env.host
+        ds.service_prefix = 'ldap'
+        ds.cert = cert
+        name = f'{ds.service_prefix}/{ds.fqdn}'
+        oldcerts = api.Command.cert_find(service=name)['result']
+        ds.add_cert_to_service(append=False)
+
+        revoke_certs(oldcerts)
 
     def replace_http_cert(self):
         """
         Replace the current HTTP cert-key pair with another one
         from a PKCS#12 file
         """
+        from ipaserver.plugins.service import revoke_certs
+
         # pass in `host_name` to perform
         # `NSSDatabase.verify_server_cert_validity()``
         cert, key, ca_cert = self.load_pkcs12(
@@ -182,6 +198,18 @@ class ServerCertInstall(admintool.AdminTool):
             certmonger.add_principal(
                 req_id, 'HTTP/{host}'.format(host=api.env.host))
             certmonger.add_subject(req_id, str(DN(cert.subject)))
+
+        http = httpinstance.HTTPInstance()
+        http.suffix = api.env.basedn
+        http.realm = api.env.realm
+        http.fqdn = api.env.host
+        http.service_prefix = 'HTTP'
+        http.cert = cert
+        name = f'{http.service_prefix}/{http.fqdn}'
+        oldcerts = api.Command.cert_find(service=name)['result']
+        http.add_cert_to_service(append=False)
+
+        revoke_certs(oldcerts)
 
     def replace_kdc_cert(self):
         # pass in `realm` to perform `NSSDatabase.verify_kdc_cert_validity()`
@@ -313,7 +341,8 @@ class ServerCertInstall(admintool.AdminTool):
             cdb.import_pkcs12(pkcs12_file.name, pin)
             news = cdb.find_server_certs()
             server_certs = [item for item in news if item not in prevs]
-            server_cert = server_certs[0][0]
+            nickname = server_certs[0][0]
+            cert = cdb.get_cert_from_db(nickname)
 
             if ca_enabled:
                 # Start tracking only if the cert was issued by IPA CA
@@ -322,11 +351,11 @@ class ServerCertInstall(admintool.AdminTool):
                     get_ca_nickname(api.env.realm))
                 # And compare with the CA which signed this certificate
                 if ca_cert == ipa_ca_cert:
-                    cdb.track_server_cert(server_cert,
+                    cdb.track_server_cert(nickname,
                                           principal,
                                           cdb.passwd_fname,
                                           command)
         except RuntimeError as e:
             raise admintool.ScriptError(str(e))
 
-        return server_cert
+        return nickname, cert
