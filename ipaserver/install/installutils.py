@@ -157,6 +157,10 @@ def verify_fqdn(host_name, no_host_dns=False, local_hostname=True):
     except ValueError as e:
         raise BadHostError("Invalid hostname '%s', %s" % (host_name, unicode(e)))
 
+    if no_host_dns:
+        print("Warning: skipping DNS resolution of host", host_name)
+        return
+
     if local_hostname:
         try:
             logger.debug('Check if %s is a primary hostname for localhost',
@@ -172,10 +176,6 @@ def verify_fqdn(host_name, no_host_dns=False, local_hostname=True):
             logger.debug(
                 'socket.gethostbyaddr() error: %d: %s',
                 e.errno, e.strerror)
-
-    if no_host_dns:
-        print("Warning: skipping DNS resolution of host", host_name)
-        return
 
     try:
         logger.debug('Search DNS for %s', host_name)
