@@ -23,5 +23,4 @@ FreeIPA workshop
    :includehidden:
 
    workshop/troubleshooting.rst
-   workshop/building.rst
    workshop/facilitators.rst
