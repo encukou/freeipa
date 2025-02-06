@@ -478,18 +478,22 @@ class TestUpgrade(IntegrationTest):
             paths.SYSTEMD_PKI_TOMCAT_IPA_CONF)
 
     def test_ssh_config(self):
-        """Test that pkg upgrade does not create /etc/ssh/ssh_config.orig
+        """Test that pkg upgrade does not create .orig files
 
         Test for ticket 9610
         The upgrade of ipa-client package should not create a backup file
-        /etc/ssh/ssh_config.orig if no change is applied.
+        /etc/ssh/ssh_config.orig or /etc/ssh/ssh_config.d/04-ipa.conf if
+        no change is applied.
         """
         # Ensure there is no backup file before the test
         self.master.run_command(["rm", "-f", paths.SSH_CONFIG + ".orig"])
+        self.master.run_command(["rm", "-f", paths.SSH_IPA_CONFIG + ".orig"])
         # Force client package reinstallation to trigger %post scriptlet
         tasks.reinstall_packages(self.master, ['*ipa-client'])
         assert not self.master.transport.file_exists(
             paths.SSH_CONFIG + ".orig")
+        assert not self.master.transport.file_exists(
+            paths.SSH_IPA_CONFIG + ".orig")
 
     def test_mspac_attribute_set(self):
         """

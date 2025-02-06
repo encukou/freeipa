@@ -1335,16 +1335,22 @@ if [ $1 -gt 1 ] ; then
         SSH_CLIENT_SYSTEM_CONF="/etc/ssh/ssh_config"
         if [ -f "$SSH_CLIENT_SYSTEM_CONF" ]; then
             if grep -E -q '^HostKeyAlgorithms ssh-rsa,ssh-dss' $SSH_CLIENT_SYSTEM_CONF 2>/dev/null; then
-                sed -E --in-place=.orig 's/^(HostKeyAlgorithms ssh-rsa,ssh-dss)$/# disabled by ipa-client update\n# \1/' "$SSH_CLIENT_SYSTEM_CONF"
+                cp "$SSH_CLIENT_SYSTEM_CONF" "${SSH_CLIENT_SYSTEM_CONF}.orig"
             fi
+            sed -E --in-place 's/^(HostKeyAlgorithms ssh-rsa,ssh-dss)$/# disabled by ipa-client update\n# \1/' "$SSH_CLIENT_SYSTEM_CONF"
             # https://pagure.io/freeipa/issue/9536
             # replace sss_ssh_knownhostsproxy with sss_ssh_knownhosts
             if [ -f '/usr/bin/sss_ssh_knownhosts' ]; then
                 if grep -E -q 'Include' $SSH_CLIENT_SYSTEM_CONF  2>/dev/null ; then
                     SSH_CLIENT_SYSTEM_CONF="/etc/ssh/ssh_config.d/04-ipa.conf"
+                    if grep -E -q '^GlobalKnownHostsFile \/var\/lib\/sss\/pubconf\/known_hosts$' $SSH_CLIENT_SYSTEM_CONF 2>/dev/null \
+                        || grep -E -q 'ProxyCommand \/usr\/bin\/sss_ssh_knownhostsproxy -p \%p \%h' $SSH_CLIENT_SYSTEM_CONF 2>/dev/null
+                    then
+                        cp "$SSH_CLIENT_SYSTEM_CONF" "${SSH_CLIENT_SYSTEM_CONF}.orig"
+                    fi
                 fi
-                sed -E --in-place=.orig 's/^(GlobalKnownHostsFile \/var\/lib\/sss\/pubconf\/known_hosts)$/# disabled by ipa-client update\n# \1/' $SSH_CLIENT_SYSTEM_CONF
-                sed -E --in-place=.orig 's/(ProxyCommand \/usr\/bin\/sss_ssh_knownhostsproxy -p \%p \%h)/# replaced by ipa-client update\n    KnownHostsCommand \/usr\/bin\/sss_ssh_knownhosts \%H/' $SSH_CLIENT_SYSTEM_CONF
+                sed -E --in-place 's/^(GlobalKnownHostsFile \/var\/lib\/sss\/pubconf\/known_hosts)$/# disabled by ipa-client update\n# \1/' $SSH_CLIENT_SYSTEM_CONF
+                sed -E --in-place 's/(ProxyCommand \/usr\/bin\/sss_ssh_knownhostsproxy -p \%p \%h)/# replaced by ipa-client update\n    KnownHostsCommand \/usr\/bin\/sss_ssh_knownhosts \%H/' $SSH_CLIENT_SYSTEM_CONF
             fi
         fi
     fi
