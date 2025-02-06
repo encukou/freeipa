@@ -20,7 +20,7 @@ Client installation
 -------------------
 
 The first step of replica creation is to enrol the machine that will
-become the replica.  SSH to the ``replica`` VM and enrol it per
+become the replica.  Enroll the ``replica`` host as a client, as seen in
 :ref:`Unit 2: Enrolling client machines <2-client-install>`
 
 Replica promotion
@@ -34,7 +34,7 @@ centre.  These roles can be configured later via
 
 ::
 
-  [replica]$ sudo ipa-replica-install
+  [root@replica]# ipa-replica-install
   Password for admin@IPADEMO.LOCAL:
   ipaserver.install.server.replicainstall: ERROR    Reverse DNS resolution of address 192.168.33.10 (server.ipademo.local) failed. Clients may not function properly. Please check your DNS setup. (Note that this check queries IPA DNS directly and ignores /etc/hosts.)
   Continue? [no]: yes

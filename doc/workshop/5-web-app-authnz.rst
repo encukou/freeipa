@@ -16,7 +16,7 @@ authentication to authenticate users, PAM to enforce HBAC rules, and
 user attributes.
 
 All activities in this unit take place on ``client`` unless
-otherwise specified.  **Access the host via ``vagrant ssh client``**
+otherwise specified.  **Access the host via ``podman exec -it client bash``**
 to ensure you have ``sudo`` access.
 
 The demo web application is trivial.  It just reads its request
@@ -60,9 +60,9 @@ We also have to move the file, change its ownership and apply the
 proper SELinux labels to the keytab file so that the Apache process
 which runs under the confined ``apache`` user may read it::
 
-  [client]$ sudo mv app.keytab /etc/httpd
-  [client]$ sudo chown apache:apache /etc/httpd/app.keytab
-  [client]$ sudo restorecon /etc/httpd/app.keytab
+  [client]$ mv app.keytab /etc/httpd
+  [client]$ chown apache:apache /etc/httpd/app.keytab
+  [client]$ restorecon /etc/httpd/app.keytab
 
 
 Enable Kerberos authentication
@@ -75,7 +75,7 @@ Negotiate / SPNEGO authentication for a web application.
 
 The Apache configuration for the demo application lives in the file
 ``/etc/httpd/conf.d/app.conf``.  Update the configuration (use
-``sudo vi`` or ``sudo nano``) to enable Kerberos authentication::
+``vi`` or ``nano``) to enable Kerberos authentication::
 
   <VirtualHost *:80>
     ServerName client.ipademo.local
@@ -153,17 +153,17 @@ attributes that you want to expose.  Add the following configuration to
 
 Restart SSSD::
 
-  [client]$ sudo systemctl restart sssd
+  [client]$ systemctl restart sssd
 
 If you had not added an email address to your users when you created them, you will need to empty the SSSD cache::
 
-  [client]$ sudo sss_cache -E
+  [client]$ sss_cache -E
 
 
 You can test the SSSD InfoPipe directly via the ``dbus-send``
 utility::
 
-  [client]$ sudo dbus-send --print-reply --system \
+  [client]$ dbus-send --print-reply --system \
       --dest=org.freedesktop.sssd.infopipe /org/freedesktop/sssd/infopipe \
       org.freedesktop.sssd.infopipe.GetUserAttr string:alice array:string:mail
   method return time=1528050430.867333 sender=:1.147 -> destination=:1.150 serial=5 reply_serial=2

@@ -1,0 +1,25 @@
+---
+lab_name: ipa-workshop-lab
+containerfiles:
+  - "containerfiles/ipaclient-container"
+  - "containerfiles/ipaserver-container"
+network: ipanet-workshop
+subnet: "192.168.33.0/24"
+ipa_deployments:
+  - name: ipa-workshop
+    domain: ipademo.local
+    cluster:
+      servers:
+        - name: server
+          hostname: server.ipademo.local
+          distro: ipaserver-container
+          capabilities: ["DNS"]
+        - name: replica
+          hostname: replica.ipademo.local
+          distro: ipaserver-container
+          dns: server
+      clients:
+        - name: client
+          hostname: client.ipademo.local
+          distro: ipaclient-container
+          dns: server

@@ -1,6 +1,6 @@
 .. _1-server-install:
 
-  Copyright 2015-2018  Red Hat, Inc.
+  Copyright 2015-2025  Red Hat, Inc.
 
   This work is licensed under the Creative Commons Attribution 4.0
   International License. To view a copy of this license, visit
@@ -10,42 +10,34 @@
 Unit 1: Installing the FreeIPA server
 =======================================
 
-In this unit you will install a FreeIPA server.  All tasks in
-subsequent units require the services and data provided by the
-server.
+In the preparation for this workshop, you created a container compose
+consisting of three hosts:
 
-First, in the directory containing the ``Vagrantfile`` (the clone of
-this repository), execute ``vagrant up`` to bring up the Vagrant
-environment.  (If you are using the VirtualBox provider on a platform
-where that is not the default, e.g. Fedora, you will also need the
-``--provider virtualbox`` option).
+- ``server``
+- ``replica``
+- ``client``
 
-::
-
-  $ vagrant up --provider virtualbox
-
-The Vagrant environment contains three hosts:
+The hostnames for the hosts are:
 
 - ``server.ipademo.local``
 - ``replica.ipademo.local``
 - ``client.ipademo.local``
 
-From the directory containing the ``Vagrantfile``, SSH into the
-``server`` machine::
+Access the ``server`` host with::
 
-  $ vagrant ssh server
-
+  $ podman exec -it server bash
 
 On ``server``, start the FreeIPA server installation program::
 
-  [server]$ sudo ipa-server-install --no-host-dns --mkhomedir
+  [server]# ipa-server-install --mkhomedir
 
-The ``--no-host-dns`` argument is needed because there are no reverse
-DNS records for the Vagrant environment.  For production deployment,
-this important sanity check should not be skipped. The ``--mkhomedir``
-flag configures PAM to create missing home directories when users log
-into the host for the first time. FreeIPA supports automount so
-consider using that for production deployments.
+On macOS, add the option ``--allow-zone-overlap``. This is required so
+that DNS reverse zones can be configured due to the configuration used
+by the podman virtual machine.
+
+The ``--mkhomedir`` flag configures PAM to create missing home directories
+when users log into the host for the first time. FreeIPA supports automount
+so consider using that for production deployments.
 
 You will be asked a series of questions. Accept the defaults for most
 of the questions, except as outlined below.
@@ -107,17 +99,15 @@ workshop) and accept the defaults for configuring the reverse zone::
   Do you want to configure DNS forwarders? [yes]: no
   No DNS forwarders configured
   Do you want to search for missing reverse zones? [yes]:
-  Do you want to create reverse zone for IP 192.168.33.10 [yes]:
-  Please specify the reverse zone name [33.168.192.in-addr.arpa.]:
-  Using reverse zone(s) 33.168.192.in-addr.arpa.
+  Do you want to create reverse zone for IP 192.168.33.2 [yes]:
 
 Next, you will be presented with a summary of the server
-configuration and asked for final confirmation.  Give confirmation to begin the
-server installation::
+configuration and asked for final confirmation.  Give confirmation to begin
+the server installation::
 
   The IPA Master Server will be configured with:
   Hostname:       server.ipademo.local
-  IP address(es): 192.168.33.10
+  IP address(es): 192.168.33.2
   Domain name:    ipademo.local
   Realm name:     IPADEMO.LOCAL
 
@@ -156,9 +146,8 @@ The FreeIPA server is now set up and you are ready to begin
 enrolling client machines, creating users, managing services, and
 more!
 
-To prepare for the next unit, exit the ``server`` SSH session (but
-do not shut the VM down).  The next essential unit is
-:ref:`Unit 2: Enrolling client machines <2-client-install>`.
+To prepare for the next unit, exit the ``server``. The next essential unit
+is :ref:`Unit 2: Enrolling client machines <2-client-install>`.
 
 Alternatively, if you would like to immediately install a replica
 server (essential for production deployments), you can take a detour

@@ -14,15 +14,14 @@ into the client machine (subject to access policies) and that *services*
 on the client can leverage FreeIPA's authentication and
 authorisation services.
 
-From the directory that contains the ``Vagrantfile``, SSH into the
-``client`` machine::
+Access the ``client`` machine::
 
-  $ vagrant ssh client
+  $ podman exec -it client bash
 
 
 On ``client``, start the FreeIPA client enrolment program::
 
-  [client]$ sudo ipa-client-install --mkhomedir
+  [client]# ipa-client-install --mkhomedir
 
 The FreeIPA server should be detected through DNS autodiscovery.
 (If DNS discovery fails, e.g. due to client machine having incorrect
@@ -32,7 +31,6 @@ manually enter the domain and server hostname instead).
 The autodetected server settings will be displayed; confirm to
 proceed::
 
-  [client]$ sudo ipa-client-install --mkhomedir
   Discovery was successful!
   Client hostname: client.ipademo.local
   Realm: IPADEMO.LOCAL

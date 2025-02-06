@@ -1,0 +1,41 @@
+FROM registry.fedoraproject.org/fedora:latest
+MAINTAINER [FreeIPA Developers freeipa-devel@lists.fedorahosted.org]
+
+RUN echo 'deltarpm = false' >> /etc/dnf/dnf.conf \
+    && dnf update -y \
+    && dnf install -y systemd \
+    && dnf install -y \
+        python3-rpm \
+        python3-libdnf5 \
+        less \
+        nano \
+        firewalld \
+        nss-tools \
+        openssh-server \
+        openssh-clients \
+        freeipa-server-trust-ad \
+        freeipa-server-dns \
+    && dnf clean all
+
+RUN sed -i 's/.*PermitRootLogin .*/#&/g' /etc/ssh/sshd_config \
+    && echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
+
+RUN sed -i -e 's@^\(session.*required.*pam_loginuid\)@#\1@' /etc/pam.d/sshd
+
+RUN systemctl enable sshd \
+    && for i in /usr/lib/systemd/system/*-domainname.service; \
+    do sed -i 's#^ExecStart=/#ExecStart=-/#' $i ; done \
+    && { systemctl mask firewalld ||: ; } \
+    && { systemctl mask systemd-resolved ||: ; } \
+    && systemctl set-default multi-user.target
+
+RUN cat >> /root/.bashrc <<EOF
+
+for file in \$(find /etc/bash_completion.d -type f)
+do
+	source \$file
+done
+EOF
+
+STOPSIGNAL RTMIN+3
+ENTRYPOINT [ "/usr/sbin/init" ]
