@@ -224,6 +224,7 @@ DEFAULT_CONFIG = (
     # For the following ports, None means a default specific to the installed
     # Dogtag version.
     ('ca_install_port', None),
+    ('ca_url_base', '/ca/v2,/ca/rest'),
 
     # Topology plugin
     ('recommended_max_agmts', 4),  # Recommended maximum number of replication

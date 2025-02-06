@@ -27,7 +27,7 @@ ProxyRequests Off
 </LocationMatch>
 
 # matches for REST API of CA, KRA, and PKI
-<LocationMatch "^/(ca|kra|pki)/rest/">
+<LocationMatch "^/(ca|kra|pki)/rest/|^/(ca|kra|pki)/v2/">
     SSLOptions +StdEnvVars +ExportCertData +StrictRequire +OptRenegotiate
     SSLVerifyClient optional
     ProxyPassMatch ajp://localhost:$DOGTAG_PORT $DOGTAG_AJP_SECRET

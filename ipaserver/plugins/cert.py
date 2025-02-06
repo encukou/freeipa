@@ -961,7 +961,6 @@ class cert_request(Create, BaseCertMethod, VirtualCommand):
                         reason=e,
                     )
                 )
-            result['request_id'] = result['request_id']
             result['cacn'] = ca_obj['cn'][0]
 
         # Success? Then add it to the principal's entry

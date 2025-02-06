@@ -597,13 +597,12 @@ class RestClient(Backend):
         # Refresh the ca_host property
         object.__setattr__(self, '_ca_host', None)
 
-        status, resp_headers, _resp_body = dogtag.https_request(
-            self.ca_host, self.override_port or self.env.ca_agent_port,
-            url='/ca/rest/account/login',
-            cafile=self.ca_cert,
-            client_certfile=self.client_certfile,
-            client_keyfile=self.client_keyfile,
-            method='GET'
+        status, resp_headers, _resp_body = self._ssldo(
+            'GET',
+            'account/login',
+            use_session=False,
+            use_clientauth=True,
+            path_override=True
         )
         cookies = ipapython.cookie.Cookie.parse(resp_headers.get('set-cookie', ''))
         if status != 200 or len(cookies) == 0:
@@ -613,17 +612,17 @@ class RestClient(Backend):
 
     def __exit__(self, exc_type, exc_value, traceback):
         """Log out of the REST API"""
-        dogtag.https_request(
-            self.ca_host, self.override_port or self.env.ca_agent_port,
-            url='/ca/rest/account/logout',
-            cafile=self.ca_cert,
-            client_certfile=self.client_certfile,
-            client_keyfile=self.client_keyfile,
-            method='GET'
+        self._ssldo(
+            'GET',
+            'account/logout',
+            use_session=False,
+            use_clientauth=True,
+            path_override=True
         )
         object.__setattr__(self, 'cookie', None)
 
-    def _ssldo(self, method, path, headers=None, body=None, use_session=True):
+    def _ssldo(self, method, path, headers=None, body=None, use_session=True,
+               use_clientauth=True, path_override=False):
         """
         Perform an HTTPS request.
 
@@ -650,29 +649,50 @@ class RestClient(Backend):
                     reason=_("REST API is not logged in."))
             headers['Cookie'] = self.cookie
 
-        resource = '/ca/rest'
-        if self.path is not None:
-            resource = os.path.join(resource, self.path)
-        if path is not None:
-            resource = os.path.join(resource, path)
+        # pylint: disable=no-member
+        resources = api.env.ca_url_base.split(',')
+        logger.debug("Available CA resources %s", resources)
+        for resource in resources:
+            resource = resource.strip()
+            if self.path is not None and not path_override:
+                resource = os.path.join(resource, self.path)
+            if path is not None:
+                resource = os.path.join(resource, path)
+            logger.debug("Trying %s", resources)
 
-        # perform main request
-        status, resp_headers, resp_body = dogtag.https_request(
-            self.ca_host, self.override_port or self.env.ca_agent_port,
-            url=resource,
-            cafile=self.ca_cert,
-            client_certfile=self.client_certfile,
-            client_keyfile=self.client_keyfile,
-            method=method, headers=headers, body=body
-        )
-        if status < 200 or status >= 300:
-            explanation = self._parse_dogtag_error(resp_body) or ''
-            raise errors.HTTPRequestError(
-                status=status,
-                reason=_('Non-2xx response from CA REST API: %(status)d. %(explanation)s')
-                % {'status': status, 'explanation': explanation}
+            if use_clientauth:
+                client_certfile = self.client_certfile
+                client_keyfile = self.client_keyfile
+            else:
+                client_certfile = None
+                client_keyfile = None
+
+            # perform main request
+            status, resp_headers, resp_body = dogtag.https_request(
+                self.ca_host, self.override_port or self.env.ca_agent_port,
+                url=resource,
+                cafile=self.ca_cert,
+                client_certfile=client_certfile,
+                client_keyfile=client_keyfile,
+                method=method, headers=headers, body=body
             )
-        return (status, resp_headers, resp_body)
+            if status in (404, 405):
+                # Not Found, Method Not Allowed. Try another endpoint.
+                logger.debug("Status %s, failing to next resource",
+                             status)
+                continue
+            if status < 200 or status >= 300:
+                break
+            return (status, resp_headers, resp_body)
+
+        explanation = self._parse_dogtag_error(resp_body) or ''
+        raise errors.HTTPRequestError(
+            status=status,
+            reason=_(
+                'Non-2xx response from CA REST API: %(status)d. '
+                '%(explanation)s'
+            ) % {'status': status, 'explanation': explanation}
+        )
 
 
 @register()
@@ -1057,6 +1077,9 @@ class ra(rabase.rabase, RestClient):
         if 'requestURL' in certinfo:
             cmd_result['request_id'] = certinfo['requestURL'].split('/')[-1]
 
+        if 'requestID' in certinfo:
+            cmd_result['request_id'] = str(int(certinfo['requestID'], 16))
+
         return cmd_result
 
     def get_pki_version(self):
@@ -1068,16 +1091,20 @@ class ra(rabase.rabase, RestClient):
 
         The response is: {"Version":"11.5.0","Attributes":{"Attribute":[]}}
         """
-        path = "/pki/rest/info"
-        logger.debug('%s.get_pki_version()', type(self).__name__)
-        http_status, _http_headers, http_body = self._ssldo(
-            'GET', path,
-            headers={
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
-            use_session=False,
-        )
+        for path in ('/pki/v2/info', '/pki/rest/info'):
+            logger.debug('%s.get_pki_version() %s', type(self).__name__, path)
+            try:
+                http_status, _http_headers, http_body = self._ssldo(
+                    'GET', path,
+                    headers={
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    },
+                    use_session=False,
+                )
+            except errors.HTTPRequestError as e:
+                if e.status == 404:  # pylint: disable=no-member
+                    continue
         if http_status != 200:
             self.raise_certificate_operation_error('get_pki_version',
                                                    detail=http_status)
@@ -1407,9 +1434,10 @@ class ra(rabase.rabase, RestClient):
         payload = json.dumps(cert_search_request, sort_keys=True)
         logger.debug('%s.find(): request: %s', type(self).__name__, payload)
 
-        url = '/ca/rest/certs/search?size=%d' % (
+        url = 'certs/search?size=%d' % (
             options.get('sizelimit', 0x7fffffff))
         # pylint: disable=unused-variable
+        """
         status, _, data = dogtag.https_request(
             self.ca_host, 443,
             url=url,
@@ -1422,6 +1450,18 @@ class ra(rabase.rabase, RestClient):
                      'Content-Type': 'application/json',
                      'Accept': 'application/json'},
             body=payload
+        )
+        """
+        status, _, data = self._ssldo(
+            'POST',
+            url,
+            use_session=False,
+            use_clientauth=False,
+            headers={'Accept-Encoding': 'gzip, deflate',
+                     'User-Agent': 'IPA',
+                     'Content-Type': 'application/json',
+                     'Accept': 'application/json'},
+            body=payload,
         )
 
         if status != 200:
