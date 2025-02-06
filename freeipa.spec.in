@@ -246,6 +246,7 @@ Source1:        https://releases.pagure.org/freeipa/freeipa-%{version}%{?rc_vers
 #   gpg --armor --export-options export-minimal --export $fpr >gpgkey-$fpr.asc
 Source2:        gpgkey-0E63D716D76AC080A4A33513F40800B6298EB963.asc
 %endif
+Source3:        freeipa.sysusers
 
 # RHEL spec file only: START: Change branding to IPA and Identity Management
 # Moved branding logos and background to redhat-logos-ipa-80.4:
@@ -296,6 +297,7 @@ BuildRequires:  python3-devel
 BuildRequires:  python3-setuptools
 BuildRequires:  python3-argcomplete
 BuildRequires:  systemd >= %{systemd_version}
+BuildRequires:  systemd-rpm-macros
 # systemd-tmpfiles which is executed from make install requires apache user
 BuildRequires:  httpd
 BuildRequires:  nspr-devel
@@ -599,6 +601,7 @@ Requires: systemd-units >= %{systemd_version}
 %if 0%{?rhel} >= 8 && ! 0%{?eln}
 Requires: system-logos-ipa >= 80.4
 %endif
+%{?sysusers_requires_compat}
 
 Provides: %{alt_name}-server-common = %{version}
 Conflicts: %{alt_name}-server-common
@@ -1086,6 +1089,9 @@ make %{?_smp_mflags} check VERBOSE=yes LIBDIR=%{_libdir}
 
 %make_install
 
+# install sysusers configuration for systemd
+install -p -D -m 0644 %{SOURCE3} %{buildroot}%{_sysusersdir}/%{package_name}.conf
+
 # don't package ipasphinx for now
 rm -rf %{buildroot}%{python3_sitelib}/ipasphinx*
 
@@ -1243,15 +1249,7 @@ fi
 
 
 %pre server-common
-# create users and groups
-# create kdcproxy group and user
-getent group kdcproxy >/dev/null || groupadd -f -r kdcproxy
-getent passwd kdcproxy >/dev/null || useradd -r -g kdcproxy -s /sbin/nologin -d / -c "IPA KDC Proxy User" kdcproxy
-# create ipaapi group and user
-getent group ipaapi >/dev/null || groupadd -f -r ipaapi
-getent passwd ipaapi >/dev/null || useradd -r -g ipaapi -s /sbin/nologin -d / -c "IPA Framework User" ipaapi
-# add apache to ipaaapi group
-id -Gn apache | grep '\bipaapi\b' >/dev/null || usermod apache -a -G ipaapi
+%sysusers_create_compat %{SOURCE3}
 
 
 %post server-dns
@@ -1710,6 +1708,8 @@ fi
 %attr(0644,root,root) %{_usr}/share/ipa/schema.d/README
 %attr(0644,root,root) %{_usr}/share/ipa/gssapi.login
 %{_usr}/share/ipa/ipakrb5.aug
+%{_sysusersdir}/%{package_name}.conf
+
 
 %files server-dns
 %doc README.md Contributors.txt

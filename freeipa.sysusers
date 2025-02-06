@@ -1,0 +1,7 @@
+# system user accounts for IPA
+# - kdcproxy user and group
+# - ipaapi user and group
+# - add Apache HTTPd user to ipaapi group
+u	kdcproxy	-	"IPA KDC Proxy User"	-	-
+u	ipaapi	-	"IPA Framework User"	-	-
+m	apache	ipaapi
