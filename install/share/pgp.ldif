@@ -1,0 +1,8 @@
+dn: ou=GPG Keys,$SUFFIX
+objectclass: organizationalUnit
+objectclass: organizationalPerson
+ou: GPG Keys
+
+dn: ou=GPG Users,$SUFFIX
+objectclass: organizationalUnit
+ou: GPG Users

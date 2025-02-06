@@ -28,6 +28,7 @@ dist_app_DATA =				\
 	71idviews.ldif			\
 	72domainlevels.ldif			\
 	73certmap.ldif			\
+	75pgp.ldif 			\
 	anon-princ-aci.ldif		\
 	bootstrap-template.ldif		\
 	ca-topology.uldif		\
@@ -107,6 +108,7 @@ dist_app_DATA =				\
 	pki-acme-issuer.conf.template	\
 	pki-acme-realm.conf.template	\
 	ldbm-tuning.ldif		\
+	pgp.ldif 		\
 	$(NULL)
 
 kdcproxyconfdir = $(IPA_SYSCONF_DIR)/kdcproxy

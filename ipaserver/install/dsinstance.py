@@ -79,6 +79,7 @@ IPA_SCHEMA_FILES = ("60kerberos.ldif",
                     "71idviews.ldif",
                     "72domainlevels.ldif",
                     "73certmap.ldif",
+                    "75pgp.ldif",
                     "15rfc2307bis.ldif",
                     "15rfc4876.ldif")
 

@@ -183,6 +183,7 @@ Developers:
 	Robert Kuska
 	s1341
 	Sam Bristow
+	Sam Cordry
 	Sam Morris
 	Scott Poore
 	Sergey Orlov
