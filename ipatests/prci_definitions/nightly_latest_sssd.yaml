@@ -258,6 +258,20 @@ jobs:
         timeout: 6000
         topology: *adroot_adchild_adtree_master_1client
 
+  sssd-fedora/test_passkey:
+    requires: [sssd-fedora/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{sssd-fedora/build_url}'
+        update_packages: True
+        copr: '@sssd/nightly'
+        test_suite: test_integration/test_passkey.py
+        template: *ci-master-latest
+        timeout: 1800
+        topology: *master_1repl_1client
+
   sssd-fedora/test_user_permissions_TestUserPermissions:
     requires: [sssd-fedora/build]
     priority: 50

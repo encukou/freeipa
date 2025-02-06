@@ -2120,6 +2120,18 @@ jobs:
         timeout: 12000
         topology: *master_1repl_1client
 
+  fedora-latest/test_passkey:
+    requires: [fedora-latest/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-latest/build_url}'
+        test_suite: test_integration/test_passkey.py
+        template: *ci-master-latest
+        timeout: 1800
+        topology: *master_1repl_1client
+
   fedora-latest/test_IPAMigrate:
     requires: [fedora-latest/build]
     priority: 50
