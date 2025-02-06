@@ -587,7 +587,7 @@ class certreq(BaseCertObject):
             'request_id',
             label=_('Request id'),
             primary_key=True,
-            flags={'no_create', 'no_update', 'no_search', 'no_output'},
+            flags={'no_create', 'no_update', 'no_search'},
         ),
     )
 
@@ -640,6 +640,10 @@ class cert_request(Create, BaseCertMethod, VirtualCommand):
             yield arg
 
     def execute(self, csr, all=False, raw=False, chain=False, **kw):
+        # deferred import to avoid issues building documentation
+        from ipaserver.install import cainstance, dsinstance, krainstance
+        from ipaserver.install.ca import lookup_ca_subject
+
         ca_enabled_check(self.api)
 
         ldap = self.api.Backend.ldap2
@@ -665,275 +669,384 @@ class cert_request(Create, BaseCertMethod, VirtualCommand):
 
         Binding with a user principal one needs to be in the request_certs
         taskgroup (directly or indirectly via role membership).
+
+        When requesting certificates for the CA/KRA subsytem profiles
+        the principal argument is going to be the host itself. We will
+        ignore it.
         """
         principal_arg = kw.get('principal')
-
-        if principal_to_principal_type(principal_arg) == KRBTGT:
-            principal_obj = None
-            principal = principal_arg
-
-            # Allow krbtgt to use only the KDC certprofile
-            if profile_id != self.Backend.ra.KDC_PROFILE:
-                raise errors.ACIError(
-                    info=_("krbtgt certs can use only the %s profile") % (
-                           self.Backend.ra.KDC_PROFILE))
-
-            # Allow only our own realm krbtgt for now; no trusted realms.
-            if principal != kerberos.Principal((u'krbtgt', realm),
-                                               realm=realm):
-                raise errors.NotFound("Not our realm's krbtgt")
-
-        else:
-            principal_obj = self.lookup_or_add_principal(principal_arg, add)
-            if 'krbcanonicalname' in principal_obj:
-                principal = principal_obj['krbcanonicalname'][0]
-            else:
-                principal = principal_obj['krbprincipalname'][0]
-
-        principal_string = unicode(principal)
-        principal_type = principal_to_principal_type(principal)
-
         op_account = getattr(context, 'principal', None)
-        if op_account is None:
-            # Can the bound principal request certs for another principal?
-            # the virtual operation check will rely on LDAP ACIs, no need
-            # for the Kerberos principal here.
-            # Force the principal that cannot be matched in normal deployments
-            op_account = '<unknown>@<UNKNOWN>'
+        logger.debug(
+            "Requesting cert for principal %s from principal %s with "
+            "profile %s", principal_arg, op_account, profile_id
+        )
+        if (
+            op_account
+            and profile_id in (
+                self.Backend.ra.OCSP_PROFILE,
+                self.Backend.ra.SUBSYSTEM_PROFILE,
+                self.Backend.ra.AUDIT_PROFILE,
+                self.Backend.ra.CACERT_PROFILE,
+                self.Backend.ra.CASERVER_PROFILE,
+                self.Backend.ra.KRA_AUDIT_PROFILE,
+                self.Backend.ra.KRA_STORAGE_PROFILE,
+                self.Backend.ra.KRA_TRANSPORT_PROFILE
+            )
+        ):
+            # Here we validate for these CA/KRA profiles:
+            #  1. the requesting principal is a host
+            #  2. the requesting principal is an IPA server
+            #  3. the subject of the CSR matches the expected
+            #     subject for this profile type
+            host_principal = kerberos.Principal(op_account)
+            if principal_to_principal_type(host_principal) != HOST:
+                raise errors.NotFound(
+                    reason=_("Certificate not requested from a host")
+                )
+            try:
+                self.api.Command.server_show(host_principal.hostname)
+            except errors.NotFound:
+                raise errors.NotFound(
+                    reason=_("Certificate not requested from an IPA server")
+                )
 
-        bind_principal = kerberos.Principal(op_account)
-        bind_principal_string = unicode(bind_principal)
-        bind_principal_type = principal_to_principal_type(bind_principal)
-
-        if (bind_principal_string != principal_string and
-                bind_principal_type != HOST):
-            # Can the bound principal request certs for another principal?
-            self.check_access()
-
-        try:
-            self.check_access("request certificate ignore caacl")
-            bypass_caacl = True
-        except errors.ACIError:
-            bypass_caacl = False
-
-        if not bypass_caacl:
-            if principal_type == KRBTGT:
-                ca_kdc_check(self.api, bind_principal.hostname)
+            ca = cainstance.CAInstance(api.env.realm)
+            reqs = ca.tracking_reqs.items()
+            kra = krainstance.KRAInstance(api.env.realm)
+            if kra.is_installed():
+                reqs = itertools.chain(reqs,
+                                       kra.tracking_reqs.items())
+            nickname = None
+            for nick, prof in reqs:
+                if prof == profile_id:
+                    nickname = nick
+                    break
+            subject_dn = None
+            if nickname:
+                logger.debug("Found CA/KRA nickname %s", nickname)
+                subject_base = dsinstance.DsInstance().find_subject_base()
+                ca_subject_dn = lookup_ca_subject(api, subject_base)
+                nickname_by_subject_dn = cainstance.get_nickname_by_subject_dn(
+                    subject_base, ca_subject_dn
+                )
+                for sub_dn, nick in nickname_by_subject_dn.items():
+                    logger.debug("Looking for %s in %s", nickname, nick)
+                    if nick == nickname:
+                        subject_dn = sub_dn
+                        break
+                if subject_dn:
+                    if subject_dn != DN(csr.subject):
+                        raise errors.NotFound(
+                            reason=_(
+                                "CSR subject mismatch, {expected} vs "
+                                "{csr}".format(
+                                    expected=subject_dn, csr=csr.subject
+                                )
+                            )
+                        )
+                    else:
+                        logger.debug("Found subject %s", subject_dn)
             else:
-                caacl_check(principal, ca, profile_id)
-
-        try:
-            ext_san = csr.extensions.get_extension_for_oid(
-                cryptography.x509.oid.ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
-        except cryptography.x509.extensions.ExtensionNotFound:
-            ext_san = None
-
-        # Ensure that the DN in the CSR matches the principal
-        #
-        # We only look at the "most specific" CN value
-        cns = csr.subject.get_attributes_for_oid(
-                cryptography.x509.oid.NameOID.COMMON_NAME)
-        if len(cns) == 0:
-            raise errors.ValidationError(name='csr',
-                error=_("No Common Name was found in subject of request."))
-        cn = cns[-1].value  # "most specific" is end of list
-
-        if principal_type in (SERVICE, HOST):
-            if not _dns_name_matches_principal(cn, principal, principal_obj):
-                raise errors.ValidationError(
-                    name='csr',
-                    error=_(
-                        "hostname in subject of request '%(cn)s' does not "
-                        "match name or aliases of principal '%(principal)s'"
-                        ) % dict(cn=cn, principal=principal))
-        elif principal_type == KRBTGT and not bypass_caacl:
-            if cn.lower() != bind_principal.hostname.lower():
-                raise errors.ACIError(
-                    info=_("hostname in subject of request '%(cn)s' "
-                           "does not match principal hostname "
-                           "'%(hostname)s'") % dict(
-                                cn=cn, hostname=bind_principal.hostname))
-        elif principal_type == USER:
-            # check user name
-            if cn != principal.username:
-                raise errors.ValidationError(
-                    name='csr',
-                    error=_("DN commonName does not match user's login")
+                raise errors.NotFound(
+                    reason=_("Unable to matcht the request to a nickname")
                 )
 
-            # check email address
-            #
-            # fail if any email addr from DN does not appear in ldap entry
-            email_addrs = csr.subject.get_attributes_for_oid(
-                    cryptography.x509.oid.NameOID.EMAIL_ADDRESS)
-            csr_emails = [attr.value for attr in email_addrs]
-            if not _emails_are_valid(csr_emails,
-                                     principal_obj.get('mail', [])):
-                raise errors.ValidationError(
-                    name='csr',
-                    error=_(
-                        "DN emailAddress does not match "
-                        "any of user's email addresses")
-                )
-
-        if principal_type != KRBTGT:
-            # We got this far so the principal entry exists, can we write it?
-            dn = principal_obj.dn
-            if not ldap.can_write(dn, "usercertificate"):
-                raise errors.ACIError(
-                    info=_("Insufficient 'write' privilege to the "
-                           "'userCertificate' attribute of entry '%s'.") % dn)
-
-        # During SAN validation, we collect IPAddressName values,
-        # and *qualified* DNS names, and then ensure that all
-        # IPAddressName values correspond to one of the DNS names.
-        #
-        san_ipaddrs = set()
-        san_dnsnames = set()
-
-        # Validate the subject alt name, if any
-        if ext_san is not None:
-            generalnames = x509.process_othernames(ext_san.value)
+            try:
+                csr.extensions.get_extension_for_oid(
+                    cryptography.x509.oid.ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
+            except cryptography.x509.extensions.ExtensionNotFound:
+                pass
+            else:
+                if profile_id != 'caServerCert':
+                    raise errors.ACIError(
+                        info=_("SAN are not allowed with the %s profile") %
+                        (profile_id)
+                    )
         else:
-            generalnames = []
-        for gn in generalnames:
-            if isinstance(gn, cryptography.x509.general_name.DNSName):
-                if principal.is_user:
+            if principal_to_principal_type(principal_arg) == KRBTGT:
+                principal_obj = None
+                principal = principal_arg
+
+                # Allow krbtgt to use only the KDC certprofile
+                if profile_id != self.Backend.ra.KDC_PROFILE:
+                    raise errors.ACIError(
+                        info=_("krbtgt certs can use only the %s profile") %
+                        (self.Backend.ra.KDC_PROFILE))
+
+                # Allow only our own realm krbtgt for now; no trusted realms.
+                if principal != kerberos.Principal((u'krbtgt', realm),
+                                                   realm=realm):
+                    raise errors.NotFound("Not our realm's krbtgt")
+
+            else:
+                principal_obj = self.lookup_or_add_principal(principal_arg, add)
+                if 'krbcanonicalname' in principal_obj:
+                    principal = principal_obj['krbcanonicalname'][0]
+                else:
+                    principal = principal_obj['krbprincipalname'][0]
+
+            principal_string = unicode(principal)
+            principal_type = principal_to_principal_type(principal)
+
+            op_account = getattr(context, 'principal', None)
+            if op_account is None:
+                # Can the bound principal request certs for another principal?
+                # the virtual operation check will rely on LDAP ACIs, no need
+                # for the Kerberos principal here.
+                # Force the principal that cannot be matched in normal
+                # deployments
+                op_account = '<unknown>@<UNKNOWN>'
+
+            bind_principal = kerberos.Principal(op_account)
+            bind_principal_string = unicode(bind_principal)
+            bind_principal_type = principal_to_principal_type(bind_principal)
+
+            if (bind_principal_string != principal_string
+                    and bind_principal_type != HOST):
+                # Can the bound principal request certs for another principal?
+                self.check_access()
+
+            try:
+                self.check_access("request certificate ignore caacl")
+                bypass_caacl = True
+            except errors.ACIError:
+                bypass_caacl = False
+
+            if not bypass_caacl:
+                if principal_type == KRBTGT:
+                    ca_kdc_check(self.api, bind_principal.hostname)
+                else:
+                    caacl_check(principal, ca, profile_id)
+
+            try:
+                ext_san = csr.extensions.get_extension_for_oid(
+                    cryptography.x509.oid.ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
+            except cryptography.x509.extensions.ExtensionNotFound:
+                ext_san = None
+
+            # Ensure that the DN in the CSR matches the principal
+            #
+            # We only look at the "most specific" CN value
+            cns = csr.subject.get_attributes_for_oid(
+                cryptography.x509.oid.NameOID.COMMON_NAME
+            )
+            if len(cns) == 0:
+                raise errors.ValidationError(
+                    name='csr',
+                    error=_("No Common Name was found in subject of request.")
+                )
+            cn = cns[-1].value  # "most specific" is end of list
+
+            if principal_type in (SERVICE, HOST):
+                if not _dns_name_matches_principal(cn, principal,
+                                                   principal_obj):
                     raise errors.ValidationError(
                         name='csr',
                         error=_(
-                            "subject alt name type %s is forbidden "
-                            "for user principals") % "DNSName"
+                            "hostname in subject of request '%(cn)s' does not "
+                            "match name or aliases of principal '%(principal)s'"
+                        ) % dict(cn=cn, principal=principal)
+                    )
+            elif principal_type == KRBTGT and not bypass_caacl:
+                if cn.lower() != bind_principal.hostname.lower():
+                    raise errors.ACIError(
+                        info=_("hostname in subject of request '%(cn)s' "
+                               "does not match principal hostname "
+                               "'%(hostname)s'") % dict(
+                                   cn=cn, hostname=bind_principal.hostname)
+                    )
+            elif principal_type == USER:
+                # check user name
+                if cn != principal.username:
+                    raise errors.ValidationError(
+                        name='csr',
+                        error=_("DN commonName does not match user's login")
                     )
 
-                name = gn.value
-
-                # Special case: if the DNS name is ipa-ca.$DOMAIN and if the
-                # subject principal is the HTTP service for an IPA server
-                # then allow the name.
-                if name == f'{IPA_CA_RECORD}.{self.api.env.domain}' \
-                        and principal.is_service \
-                        and principal.service_name == 'HTTP':
-                    try:
-                        self.api.Command.server_show(principal.hostname)
-                    except errors.NotFound:
-                        pass  # not an IPA server; proceed as usual
-                    else:
-                        # subject principal is an IPA server, so the
-                        # ipa-ca.$DOMAIN name is allowed
-                        continue
-
-                if _dns_name_matches_principal(name, principal, principal_obj):
-                    san_dnsnames.add(name)
-                    continue  # nothing more to check for this alt name
-
-                # no match yet; check for an alternative principal with
-                # same realm and service type as subject principal.
-                components = list(principal.components)
-                components[-1] = name
-                alt_principal = kerberos.Principal(components, principal.realm)
-                alt_principal_obj = None
-                try:
-                    if principal_type == HOST:
-                        alt_principal_obj = api.Command['host_show'](
-                            name, all=True)['result']
-                    elif principal_type == KRBTGT:
-                        alt_principal = kerberos.Principal(
-                            (u'host', name), principal.realm)
-                    elif principal_type == SERVICE:
-                        alt_principal_obj = api.Command['service_show'](
-                            alt_principal, all=True)['result']
-                except errors.NotFound:
-                    # We don't want to issue any certificates referencing
-                    # machines we don't know about. Nothing is stored in this
-                    # host record related to this certificate.
-                    raise errors.NotFound(reason=_('The service principal for '
-                        'subject alt name %s in certificate request does not '
-                        'exist') % name)
-
-                if alt_principal_obj is not None:
-                    # We found an alternative principal.
-
-                    # First check that the DNS name does in fact match this
-                    # principal.  Because we used the DNSName value as the
-                    # basis for the search, this may seem redundant.  Actually,
-                    # we only perform this check to distinguish between
-                    # qualified and unqualified DNS names.
-                    #
-                    # We collect only fully qualified names for the purposes of
-                    # IPAddressName validation, because it is undecidable
-                    # whether 'ninja' refers to 'ninja.my.domain.' or 'ninja.'.
-                    # Remember that even a TLD can have an A record!
-                    #
-                    if _dns_name_matches_principal(
-                            name, alt_principal, alt_principal_obj):
-                        san_dnsnames.add(name)
-                    else:
-                        # Unqualified SAN DNS names are a valid use case.
-                        # We don't add them to san_dnsnames for IPAddress
-                        # validation, but we don't reject the request either.
-                        pass
-
-                    # Now check write access and caacl
-                    altdn = alt_principal_obj['dn']
-                    if not ldap.can_write(altdn, "usercertificate"):
-                        raise errors.ACIError(info=_(
-                            "Insufficient privilege to create a certificate "
-                            "with subject alt name '%s'.") % name)
-                if not bypass_caacl:
-                    if principal_type == KRBTGT:
-                        ca_kdc_check(self.api, alt_principal.hostname)
-                    else:
-                        caacl_check(alt_principal, ca, profile_id)
-
-            elif isinstance(gn, (x509.KRB5PrincipalName, x509.UPN)):
-                if principal_type == KRBTGT:
-                        principal_obj = dict()
-                        principal_obj['krbprincipalname'] = [
-                            kerberos.Principal((u'krbtgt', realm), realm)]
-                if not _principal_name_matches_principal(
-                        gn.name, principal_obj):
+                # check email address
+                #
+                # fail if any email addr from DN does not appear in ldap entry
+                email_addrs = csr.subject.get_attributes_for_oid(
+                    cryptography.x509.oid.NameOID.EMAIL_ADDRESS
+                )
+                csr_emails = [attr.value for attr in email_addrs]
+                if not _emails_are_valid(csr_emails,
+                                         principal_obj.get('mail', [])):
                     raise errors.ValidationError(
                         name='csr',
                         error=_(
-                            "Principal '%s' in subject alt name does not "
-                            "match requested principal") % gn.name)
-            elif isinstance(gn, cryptography.x509.general_name.RFC822Name):
-                if principal_type == USER:
-                    if not _emails_are_valid([gn.value],
-                                             principal_obj.get('mail', [])):
+                            "DN emailAddress does not match "
+                            "any of user's email addresses")
+                    )
+
+            if principal_type != KRBTGT:
+                # We got this far so the principal entry exists,
+                # can we write it?
+                dn = principal_obj.dn
+                if not ldap.can_write(dn, "usercertificate"):
+                    raise errors.ACIError(
+                        info=_("Insufficient 'write' privilege to the "
+                               "'userCertificate' attribute of entry "
+                               "'%s'.") % dn)
+
+            # During SAN validation, we collect IPAddressName values,
+            # and *qualified* DNS names, and then ensure that all
+            # IPAddressName values correspond to one of the DNS names.
+            #
+            san_ipaddrs = set()
+            san_dnsnames = set()
+
+            # Validate the subject alt name, if any
+            if ext_san is not None:
+                generalnames = x509.process_othernames(ext_san.value)
+            else:
+                generalnames = []
+            for gn in generalnames:
+                if isinstance(gn, cryptography.x509.general_name.DNSName):
+                    if principal.is_user:
                         raise errors.ValidationError(
                             name='csr',
                             error=_(
-                                "RFC822Name does not match "
-                                "any of user's email addresses")
+                                "subject alt name type %s is forbidden "
+                                "for user principals") % "DNSName"
                         )
+
+                    name = gn.value
+
+                    # Special case: if the DNS name is ipa-ca.$DOMAIN and if the
+                    # subject principal is the HTTP service for an IPA server
+                    # then allow the name.
+                    if name == f'{IPA_CA_RECORD}.{self.api.env.domain}' \
+                            and principal.is_service \
+                            and principal.service_name == 'HTTP':
+                        try:
+                            self.api.Command.server_show(principal.hostname)
+                        except errors.NotFound:
+                            pass  # not an IPA server; proceed as usual
+                        else:
+                            # subject principal is an IPA server, so the
+                            # ipa-ca.$DOMAIN name is allowed
+                            continue
+
+                    if _dns_name_matches_principal(name,
+                                                   principal, principal_obj):
+                        san_dnsnames.add(name)
+                        continue  # nothing more to check for this alt name
+
+                    # no match yet; check for an alternative principal with
+                    # same realm and service type as subject principal.
+                    components = list(principal.components)
+                    components[-1] = name
+                    alt_principal = kerberos.Principal(
+                        components, principal.realm
+                    )
+                    alt_principal_obj = None
+                    try:
+                        if principal_type == HOST:
+                            alt_principal_obj = api.Command['host_show'](
+                                name, all=True)['result']
+                        elif principal_type == KRBTGT:
+                            alt_principal = kerberos.Principal(
+                                (u'host', name), principal.realm)
+                        elif principal_type == SERVICE:
+                            alt_principal_obj = api.Command['service_show'](
+                                alt_principal, all=True)['result']
+                    except errors.NotFound:
+                        # We don't want to issue any certificates referencing
+                        # machines we don't know about. Nothing is stored in
+                        # this host record related to this certificate.
+                        raise errors.NotFound(reason=_(
+                            'The service principal for subject alt name %s '
+                            'in certificate request does not '
+                            'exist') % name
+                        )
+
+                    if alt_principal_obj is not None:
+                        # We found an alternative principal.
+
+                        # First check that the DNS name does in fact match this
+                        # principal.  Because we used the DNSName value as the
+                        # basis for the search, this may seem redundant.
+                        # Actually, we only perform this check to distinguish
+                        # between qualified and unqualified DNS names.
+                        #
+                        # We collect only fully qualified names for the
+                        # purposes of IPAddressName validation, because it
+                        # is undecidable whether 'ninja' refers to
+                        # 'ninja.my.domain.' or 'ninja.'.
+                        # Remember that even a TLD can have an A record!
+                        #
+                        if _dns_name_matches_principal(
+                                name, alt_principal, alt_principal_obj):
+                            san_dnsnames.add(name)
+                        else:
+                            # Unqualified SAN DNS names are a valid use case.
+                            # We don't add them to san_dnsnames for IPAddress
+                            # validation, but we don't reject the request
+                            # either.
+                            pass
+
+                        # Now check write access and caacl
+                        altdn = alt_principal_obj['dn']
+                        if not ldap.can_write(altdn, "usercertificate"):
+                            raise errors.ACIError(info=_(
+                                "Insufficient privilege to create a "
+                                "certificate with subject alt name "
+                                "'%s'.") % name)
+                    if not bypass_caacl:
+                        if principal_type == KRBTGT:
+                            ca_kdc_check(self.api, alt_principal.hostname)
+                        else:
+                            caacl_check(alt_principal, ca, profile_id)
+
+                elif isinstance(gn, (x509.KRB5PrincipalName, x509.UPN)):
+                    if principal_type == KRBTGT:
+                        principal_obj = dict()
+                        principal_obj['krbprincipalname'] = [
+                            kerberos.Principal((u'krbtgt', realm), realm)]
+                    if not _principal_name_matches_principal(
+                            gn.name, principal_obj):
+                        raise errors.ValidationError(
+                            name='csr',
+                            error=_(
+                                "Principal '%s' in subject alt name does not "
+                                "match requested principal") % gn.name)
+                elif isinstance(gn, cryptography.x509.general_name.RFC822Name):
+                    if principal_type == USER:
+                        if not _emails_are_valid([gn.value],
+                                                 principal_obj.get('mail', [])):
+                            raise errors.ValidationError(
+                                name='csr',
+                                error=_(
+                                    "RFC822Name does not match "
+                                    "any of user's email addresses")
+                            )
+                    else:
+                        raise errors.ValidationError(
+                            name='csr',
+                            error=_(
+                                "subject alt name type %s is forbidden "
+                                "for non-user principals") % "RFC822Name"
+                        )
+                elif isinstance(gn, cryptography.x509.general_name.IPAddress):
+                    if principal.is_user:
+                        raise errors.ValidationError(
+                            name='csr',
+                            error=_(
+                                "subject alt name type %s is forbidden "
+                                "for user principals") % "IPAddress"
+                        )
+
+                    # collect the value; we will validate it after we
+                    # finish iterating all the SAN values
+                    san_ipaddrs.add(gn.value)
                 else:
-                    raise errors.ValidationError(
-                        name='csr',
-                        error=_(
-                            "subject alt name type %s is forbidden "
-                            "for non-user principals") % "RFC822Name"
-                    )
-            elif isinstance(gn, cryptography.x509.general_name.IPAddress):
-                if principal.is_user:
-                    raise errors.ValidationError(
-                        name='csr',
-                        error=_(
-                            "subject alt name type %s is forbidden "
-                            "for user principals") % "IPAddress"
-                    )
+                    raise errors.ACIError(
+                        info=_("Subject alt name type %s is forbidden")
+                        % type(gn).__name__)
 
-                # collect the value; we will validate it after we
-                # finish iterating all the SAN values
-                san_ipaddrs.add(gn.value)
-            else:
-                raise errors.ACIError(
-                    info=_("Subject alt name type %s is forbidden")
-                    % type(gn).__name__)
-
-        if san_ipaddrs:
-            _validate_san_ips(san_ipaddrs, san_dnsnames)
+            if san_ipaddrs:
+                _validate_san_ips(san_ipaddrs, san_dnsnames)
 
         # Request the certificate
         try:
@@ -966,23 +1079,27 @@ class cert_request(Create, BaseCertMethod, VirtualCommand):
 
         # Success? Then add it to the principal's entry
         # (unless the profile tells us not to)
-        profile = api.Command['certprofile_show'](profile_id)
-        store = profile['result']['ipacertprofilestoreissued'][0]
-        if store and 'certificate' in result:
-            cert = result.get('certificate')
-            kwargs = dict(addattr=u'usercertificate={}'.format(cert))
-            # note: we call different commands for the different
-            # principal types because handling of 'userCertificate'
-            # vs. 'userCertificate;binary' varies by plugin.
-            if principal_type == SERVICE:
-                api.Command['service_mod'](principal_string, **kwargs)
-            elif principal_type == HOST:
-                api.Command['host_mod'](principal.hostname, **kwargs)
-            elif principal_type == USER:
-                api.Command['user_mod'](principal.username, **kwargs)
-            elif principal_type == KRBTGT:
-                logger.error("Profiles used to store cert should't be "
-                             "used for krbtgt certificates")
+        try:
+            profile = api.Command['certprofile_show'](profile_id)
+        except Exception as e:
+            logger.debug("certprofile-show failed with %s", e)
+        else:
+            store = profile['result']['ipacertprofilestoreissued'][0]
+            if store and 'certificate' in result:
+                cert = result.get('certificate')
+                kwargs = dict(addattr=u'usercertificate={}'.format(cert))
+                # note: we call different commands for the different
+                # principal types because handling of 'userCertificate'
+                # vs. 'userCertificate;binary' varies by plugin.
+                if principal_type == SERVICE:
+                    api.Command['service_mod'](principal_string, **kwargs)
+                elif principal_type == HOST:
+                    api.Command['host_mod'](principal.hostname, **kwargs)
+                elif principal_type == USER:
+                    api.Command['user_mod'](principal.username, **kwargs)
+                elif principal_type == KRBTGT:
+                    logger.error("Profiles used to store cert should't be "
+                                 "used for krbtgt certificates")
 
         if 'certificate_chain' in ca_obj:
             cert = x509.load_der_x509_certificate(
@@ -1268,6 +1385,23 @@ class cert_status(Retrieve, BaseCertMethod, VirtualCommand):
 
         return dict(
             result=self.Backend.ra.check_request_status(str(request_id)),
+            value=pkey_to_value(request_id, kw),
+        )
+
+
+@register()
+class cert_approve(Retrieve, BaseCertMethod, VirtualCommand):
+    __doc__ = _('Approve a certificate signing request.')
+
+    operation = "certificate approve"
+
+    def execute(self, request_id, **kw):
+        ca_enabled_check(self.api)
+
+        self.check_access()
+
+        return dict(
+            result=self.Backend.ra.approve_request(str(request_id)),
             value=pkey_to_value(request_id, kw),
         )
 

@@ -290,6 +290,8 @@ CMS_STATUS_REJECTED     = 5
 CMS_STATUS_ERROR        = 6
 CMS_STATUS_EXCEPTION    = 7
 
+MAX_INT32 = 2147483647
+
 
 def cms_request_status_to_string(request_status):
     '''
@@ -537,6 +539,16 @@ class RestClient(Backend):
     """
     DEFAULT_PROFILE = dogtag.DEFAULT_PROFILE
     KDC_PROFILE = dogtag.KDC_PROFILE
+    OCSP_PROFILE = dogtag.OCSP_PROFILE
+    SUBSYSTEM_PROFILE = dogtag.SUBSYSTEM_PROFILE
+    AUDIT_PROFILE = dogtag.AUDIT_PROFILE
+    CACERT_PROFILE = dogtag.CACERT_PROFILE
+    CASERVER_PROFILE = dogtag.CASERVER_PROFILE
+    KRA_AUDIT_PROFILE = dogtag.KRA_AUDIT_PROFILE
+    KRA_STORAGE_PROFILE = dogtag.KRA_STORAGE_PROFILE
+    KRA_TRANSPORT_PROFILE = dogtag.KRA_TRANSPORT_PROFILE
+
+
     path = None
 
     @staticmethod
@@ -846,15 +858,49 @@ class ra(rabase.rabase, RestClient):
         # Return command result
         cmd_result = {}
         if 'certId' in parse_result:
-            cmd_result['serial_number'] = int(parse_result['certId'], 16)
+            cmd_result['serial_number'] = str(int(parse_result['certId'], 16))
 
         if 'requestID' in parse_result:
-            cmd_result['request_id'] = int(parse_result['requestID'], 16)
+            cmd_result['request_id'] = str(int(parse_result['requestID'], 16))
 
         if 'requestStatus' in parse_result:
             cmd_result['cert_request_status'] = parse_result['requestStatus']
 
         return cmd_result
+
+    def get_certificate_request(self, request_id):
+        """
+        Retrieve the full certificate request
+        """
+        path = 'agent/certrequests/{}'.format(request_id)
+        try:
+            http_status, _http_headers, http_body = self._ssldo(
+                'GET', path,
+                headers={
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                use_session=False,
+            )
+        except errors.HTTPRequestError as e:
+            self.raise_certificate_operation_error(
+                'approve_request',
+                err_msg=e.msg,
+                detail=e.status  # pylint: disable=no-member
+            )
+
+        if http_status != 200:
+            self.raise_certificate_operation_error('get_certificate_request',
+                                                   detail=http_status)
+
+        try:
+            request = json.loads(ipautil.decode_json(http_body))
+        except ValueError:
+            logger.debug("Response from CA was not valid JSON: %s", e)
+            raise errors.RemoteRetrieveError(
+                reason=_("Response from CA was not valid JSON")
+            )
+        return request
 
     def get_certificate(self, serial_number):
         """
@@ -1045,7 +1091,7 @@ class ra(rabase.rabase, RestClient):
             return cmd_result
         certinfo = entries[0]
 
-        if certinfo['requestStatus'] != 'complete':
+        if certinfo['requestStatus'] not in ('complete', 'pending'):
             raise errors.CertificateOperationError(
                     error=certinfo.get('errorMessage'))
 
@@ -1056,6 +1102,9 @@ class ra(rabase.rabase, RestClient):
 
         if 'requestURL' in certinfo:
             cmd_result['request_id'] = certinfo['requestURL'].split('/')[-1]
+        elif 'requestId' in certinfo:
+            cmd_result['request_id'] = str(int(certinfo['requestId'], 16))
+        cmd_result['cert_request_status'] = certinfo['requestStatus']
 
         return cmd_result
 
@@ -1534,6 +1583,104 @@ class ra(rabase.rabase, RestClient):
 
         return cmd_result
 
+    def approve_request(self, request_id):
+        """
+        :param request_id: request ID
+
+        Approve a certificate signing request.
+
+        The command returns a dict with these possible key/value pairs.
+        Some key/value pairs may be absent.
+
+        +-------------------+---------------+---------------+
+        |result name        |result type    |comments       |
+        +===================+===============+===============+
+        |serial_number      |unicode [1]_   |               |
+        +-------------------+---------------+---------------+
+        |request_id         |unicode [1]_   |               |
+        +-------------------+---------------+---------------+
+        |cert_request_status|unicode [2]_   |               |
+        +-------------------+---------------+---------------+
+
+        .. [1] The request_id and serial_number values are as
+               decimal regardless of what the request contains.
+
+        .. [2] cert_request_status, requestStatus, may be one of:
+
+               - "begin"
+               - "pending"
+               - "approved"
+               - "svc_pending"
+               - "canceled"
+               - "rejected"
+               - "complete"
+
+        The result component of IPA API responds with JSON in the form of:
+
+        "result": {
+            "cert_request_status": "complete",
+            "request_id": "214708171545060652318544694826586802577",
+            "serial_number": "140329369075043613975209265839482570077"
+        },
+        "summary": null,
+        "value": "214708171545060652318544694826586802577"
+
+
+        """
+        logger.debug('%s.approve_request()', type(self).__name__)
+
+        # Retrieve and verify the request
+        request = self.get_certificate_request(request_id)
+
+        if request['requestStatus'] != 'pending':
+            self.raise_certificate_operation_error(
+                'approve_request',
+                err_msg='Not in pending state',
+                detail=400
+            )
+
+        profile = request['ProfileID']
+        if profile not in (
+            self.OCSP_PROFILE,
+            self.SUBSYSTEM_PROFILE,
+            self.AUDIT_PROFILE,
+            self.CACERT_PROFILE,
+            self.CASERVER_PROFILE,
+            self.KRA_AUDIT_PROFILE,
+            self.KRA_STORAGE_PROFILE,
+            self.KRA_TRANSPORT_PROFILE
+        ):
+            self.raise_certificate_operation_error(
+                'approve_request',
+                err_msg="Profile '%s' not on the approved list." % profile,
+                detail=400
+            )
+
+        # Approve the request
+        path = 'agent/certrequests/{}/approve'.format(request_id)
+        try:
+            http_status, _http_headers, _http_body = self._ssldo(
+                'POST', path,
+                headers={
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body=json.dumps(request),
+                use_session=False,
+            )
+        except errors.HTTPRequestError as e:
+            self.raise_certificate_operation_error(
+                'approve_request',
+                err_msg=e.msg,
+                detail=e.status  # pylint: disable=no-member
+            )
+
+        if http_status != 204:
+            self.raise_certificate_operation_error('approve_request',
+                                                   detail=http_status)
+
+        return self.check_request_status(request_id)
+
 
 # ----------------------------------------------------------------------------
 @register()
@@ -1657,6 +1804,32 @@ class ra_certprofile(RestClient):
         Delete the profile from Dogtag
         """
         self._ssldo('DELETE', profile_id, headers={'Accept': 'application/json'})
+
+    def list_profiles(self):
+        savepath = self.path
+        self.path = None
+        path = 'profiles?visible=true&enable=true&size={}'.format(MAX_INT32)
+
+        try:
+            _http_status, _http_headers, http_body = self._ssldo(
+                'GET', path, headers={'Accept': 'application/json',})
+        finally:
+            self.path = savepath
+
+        data = json.loads(http_body)
+
+        profiles = data['entries']
+
+        results = []
+
+        for profile in profiles:
+            response = {}
+            response['profile_id'] = profile.get('profileId')
+            response['profile_name'] = profile.get('profileName')
+            response['profile_enabled'] = profile.get('profileEnable')
+            results.append(response)
+
+        return results
 
 
 @register()

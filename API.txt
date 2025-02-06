@@ -753,6 +753,16 @@ option: Str('version?')
 output: Entry('result')
 output: Output('summary', type=[<type 'unicode'>, <type 'NoneType'>])
 output: PrimaryKey('value')
+command: cert_approve/1
+args: 1,4,3
+arg: SerialNumber('serial_number')
+option: Flag('all', autofill=True, cli_name='all', default=False)
+option: Str('cacn?', autofill=True, cli_name='ca', default=u'ipa')
+option: Flag('raw', autofill=True, cli_name='raw', default=False)
+option: Str('version?')
+output: Entry('result')
+output: Output('summary', type=[<type 'unicode'>, <type 'NoneType'>])
+output: PrimaryKey('value')
 command: cert_find/1
 args: 1,30,4
 arg: Str('criteria?')
@@ -7093,6 +7103,7 @@ default: caacl_remove_service/1
 default: caacl_remove_user/1
 default: caacl_show/1
 default: cert/1
+default: cert_approve/1
 default: cert_find/1
 default: cert_remove_hold/1
 default: cert_request/1

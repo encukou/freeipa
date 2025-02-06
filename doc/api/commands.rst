@@ -65,6 +65,7 @@ IPA API Commands
    caacl_remove_service.md
    caacl_remove_user.md
    caacl_show.md
+   cert_approve.md
    cert_find.md
    cert_remove_hold.md
    cert_request.md

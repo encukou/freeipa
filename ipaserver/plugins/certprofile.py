@@ -2,6 +2,7 @@
 # Copyright (C) 2015  FreeIPA Contributors see COPYING for license
 #
 
+import logging
 import re
 
 from ipalib import api, Bool, Str
@@ -9,11 +10,13 @@ from ipalib.plugable import Registry
 from .baseldap import (
     LDAPObject, LDAPSearch, LDAPCreate,
     LDAPDelete, LDAPUpdate, LDAPRetrieve)
+from .virtual import VirtualCommand
 from ipalib.request import context
 from ipalib import ngettext
 from ipalib.text import _
 from ipapython.dogtag import INCLUDED_PROFILES
 from ipapython.version import API_VERSION
+from ipapython.dn import DN
 
 from ipalib import errors
 
@@ -69,7 +72,16 @@ The following restrictions apply to profiles managed by IPA:
 - The "certReqInputImpl" input class and "certOutputImpl" output
   class must be used.
 
+SERVER-SIDE PROFILES:
+
+There profiles stored in the CA which may not be visible to an end user.
+These non-local (to IPA) profiles are marked as such in output. In order
+to modify these a profile of the same name would need to be added to IPA
+in order to make it local.
+
 """)
+
+logger = logging.getLogger(__name__)
 
 
 register = Registry()
@@ -107,7 +119,8 @@ class certprofile(LDAPObject):
     object_name_plural = _('Certificate Profiles')
     object_class = ['ipacertprofile']
     default_attributes = [
-        'cn', 'description', 'ipacertprofilestoreissued'
+        'cn', 'description', 'ipacertprofilestoreissued',
+        'ipacertprofilelocal',
     ]
     search_attributes = [
         'cn', 'description', 'ipacertprofilestoreissued'
@@ -138,6 +151,10 @@ class certprofile(LDAPObject):
             label=_('Store issued certificates'),
             doc=_('Whether to store certs issued using this profile'),
         ),
+        Bool('ipacertprofilelocal',
+             label=_('Local profile'),
+             flags={'virtual_attribute', 'no_create', 'no_update',
+                    'no_search'},),
     )
 
     permission_filter_objectclasses = ['ipacertprofile']
@@ -182,17 +199,54 @@ class certprofile(LDAPObject):
     }
 
 
-
 @register()
-class certprofile_find(LDAPSearch):
+class certprofile_find(LDAPSearch, VirtualCommand):
     __doc__ = _("Search for Certificate Profiles.")
     msg_summary = ngettext(
         '%(count)d profile matched', '%(count)d profiles matched', 0
     )
 
+    operation = "list all profiles"
+
     def execute(self, *args, **kwargs):
         ca_enabled_check(self.api)
-        return super(certprofile_find, self).execute(*args, **kwargs)
+        result = super(certprofile_find, self).execute(*args, **kwargs)
+
+        for r in result['result']:
+            r['ipacertprofilelocal'] = [True]
+
+        logger.debug("result %s", result)
+        if len(args) == 0:
+            try:
+                self.check_access()
+            except errors.ACIError:
+                logger.debug("Virtual request for profiles failed")
+            else:
+                with self.api.Backend.ra_certprofile as profile_api:
+                    profiles = profile_api.list_profiles()
+
+                ipa_list = []
+                for entry in result['result']:
+                    ipa_list.append(entry['cn'][0])
+
+                for entry in profiles:
+                    if entry['profile_id'] in ipa_list:
+                        continue
+                    new = {
+                        # We don't have a DN for profiles that come from the CA
+                        # so fill something in so all the entries contain the
+                        # same set of attributes.
+                        'dn': DN('cn={}'.format(entry['profile_id'])),
+                        'cn': [entry['profile_id']],
+                        'description': [entry['profile_name']],
+                        'ipacertprofilestoreissued': [False],
+                        'ipacertprofilelocal': [False],
+                    }
+                    result['result'].append(new)
+
+        result['count'] = len(result['result'])
+
+        return result
 
 
 @register()
@@ -214,6 +268,11 @@ class certprofile_show(LDAPRetrieve):
                 result['result']['config'] = profile_api.read_profile(keys[0])
 
         return result
+
+    def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
+        entry_attrs['ipacertprofilelocal'] = [True]
+
+        return dn
 
 
 @register()
@@ -258,7 +317,6 @@ class certprofile_import(LDAPCreate):
             )
         return dn
 
-
     def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
         """Import the profile into Dogtag and enable it.
 
@@ -268,6 +326,7 @@ class certprofile_import(LDAPCreate):
             with self.api.Backend.ra_certprofile as profile_api:
                 profile_api.create_profile(context.profile)
                 profile_api.enable_profile(keys[0])
+            entry_attrs['ipacertprofilelocal'] = [True]
         except BaseException:
             # something went wrong ; delete entry
             ldap.delete_entry(dn)
@@ -347,3 +406,8 @@ class certprofile_mod(LDAPUpdate):
             else:
                 # This case is actually an error; re-raise
                 raise
+
+    def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
+        entry_attrs['ipacertprofilelocal'] = [True]
+
+        return dn

@@ -63,6 +63,14 @@ INCLUDED_PROFILES = {
 
 DEFAULT_PROFILE = u'caIPAserviceCert'
 KDC_PROFILE = u'KDCs_PKINIT_Certs'
+OCSP_PROFILE = 'caOCSPCert'
+SUBSYSTEM_PROFILE = 'caSubsystemCert'
+AUDIT_PROFILE = 'caSignedLogCert'
+CACERT_PROFILE = 'caCACert'
+CASERVER_PROFILE = 'caServerCert'
+KRA_AUDIT_PROFILE = 'caAuditSigningCert'
+KRA_STORAGE_PROFILE = 'caStorageCert'
+KRA_TRANSPORT_PROFILE = 'caTransportCert'
 
 
 if six.PY3:

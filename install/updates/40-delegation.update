@@ -140,6 +140,16 @@ default:objectClass: top
 default:objectClass: nsContainer
 default:cn: request certificate ignore caacl
 
+dn: cn=list all profiles,cn=virtual operations,cn=etc,$SUFFIX
+default:objectClass: top
+default:objectClass: nsContainer
+default:cn: list all profiles
+
+dn: cn=certificate approve,cn=virtual operations,cn=etc,$SUFFIX
+default:objectClass: top
+default:objectClass: nsContainer
+default:cn: certificate approve
+
 dn: cn=Request Certificate ignoring CA ACLs,cn=permissions,cn=pbac,$SUFFIX
 default:objectClass: top
 default:objectClass: groupofnames
@@ -147,9 +157,33 @@ default:objectClass: ipapermission
 default:cn: Request Certificate ignoring CA ACLs
 default:member: cn=Certificate Administrators,cn=privileges,cn=pbac,$SUFFIX
 
+dn: cn=List all profiles from the CA,cn=permissions,cn=pbac,$SUFFIX
+default:objectClass: top
+default:objectClass: groupofnames
+default:objectClass: ipapermission
+default:cn: List all profiles from the CA
+default:member: cn=ipaservers,cn=hostgroups,cn=accounts,$SUFFIX
+
+dn: cn=Approve certificate requests,cn=permissions,cn=pbac,$SUFFIX
+default:objectClass: top
+default:objectClass: groupofnames
+default:objectClass: ipapermission
+default:cn: Approve certificate requests
+default:member: cn=ipaservers,cn=hostgroups,cn=accounts,$SUFFIX
+
 dn: $SUFFIX
 add:aci:(targetattr = "objectclass")(target = "ldap:///cn=request certificate ignore caacl,cn=virtual operations,cn=etc,$SUFFIX" )(version 3.0; acl "permission:Request Certificate ignoring CA ACLs"; allow (write) groupdn = "ldap:///cn=Request Certificate ignoring CA ACLs,cn=permissions,cn=pbac,$SUFFIX";)
 
+dn: $SUFFIX
+add:aci: (targetattr = "objectclass")(target = "ldap:///cn=list all profiles,cn=virtual operations,cn=etc,$SUFFIX" )(version 3.0 ; acl "permission:List all profiles from the CA" ; allow (write) groupdn = "ldap:///cn=List all profiles from the CA,cn=permissions,cn=pbac,$SUFFIX";)
+
+dn: $SUFFIX
+add:aci: (targetattr = "objectclass")(target = "ldap:///cn=certificate approve,cn=virtual operations,cn=etc,$SUFFIX" )(version 3.0 ; acl "permission:Approve certificate requests" ; allow (write) groupdn = "ldap:///cn=Approve certificate requests,cn=permissions,cn=pbac,$SUFFIX";)
+
+# IPA host can retrieve certificates
+dn: $SUFFIX
+dn: cn=Retrieve Certificates from the CA,cn=permissions,cn=pbac,$SUFFIX
+add: member: cn=ipaservers,cn=hostgroups,cn=accounts,$SUFFIX
 
 # Read privileges
 dn: cn=RBAC Readers,cn=privileges,cn=pbac,$SUFFIX
