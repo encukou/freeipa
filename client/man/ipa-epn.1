@@ -70,6 +70,16 @@ First name: first
 Last name: Last
 .TP
 Password expiration date: expiration
+.TP
+Python datetime.datetime expiration: expiration_datetime
+The Python datetime.datetime object representing the expiration date.
+.TP
+Python datetime.timedelta: expiration_delta
+The Python datetime.timedelta object representing the remaining time until expiration.
+.P
+expiration_datetime and expiration_delta are real Python objects that can be used with the Jinja2 templating engine. You can use the strftime method to format the date according to your native format.
+.IP
+  Your accounts will expire in {{ expiration_delta.days }} day{{ 's' if expiration_delta.days > 1 else ''}}
 
 .SH "EXAMPLES"
 .nf

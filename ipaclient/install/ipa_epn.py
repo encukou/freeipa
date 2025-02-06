@@ -553,14 +553,21 @@ class EPN(admintool.AdminTool):
                 mail_from = api.env.mail_from
             else:
                 mail_from = "noreply@%s" % self.default_email_domain
+            now = datetime.now(tz=UTC)
             while self._expiring_password_user_list:
                 entry = self._expiring_password_user_list.pop()
+                expdate = datetime.strptime(
+                    entry["krbpasswordexpiration"],
+                    '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
+                expdelta = expdate - now
                 body = template.render(
                     uid=entry["uid"],
                     first=entry["givenname"],
                     last=entry["sn"],
                     fullname=entry["cn"],
                     expiration=entry["krbpasswordexpiration"],
+                    expiration_datetime=expdate,
+                    expiration_delta=expdelta,
                 )
                 self._mailer.send_message(
                     mail_subject=api.env.msg_subject,
@@ -569,13 +576,9 @@ class EPN(admintool.AdminTool):
                     mail_from=mail_from,
                     mail_from_name=api.env.mail_from_name,
                 )
-                now = datetime.now(tz=UTC)
-                expdate = datetime.strptime(
-                    entry["krbpasswordexpiration"],
-                    '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
                 logger.debug(
                     "Notified %s (%s). Password expiring in %d days at %s.",
-                    entry["mail"], entry["uid"], (expdate - now).days,
+                    entry["mail"], entry["uid"], expdelta.days,
                     expdate)
                 if api.env.smtp_delay:
                     time.sleep(float(api.env.smtp_delay) / 1000)
