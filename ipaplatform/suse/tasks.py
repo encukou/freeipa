@@ -18,12 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 class SuseTaskNamespace(RedHatTaskNamespace):
-    def restore_context(self, filepath, force=False):
-        pass  # FIXME: Implement after libexec move
-
-    def check_selinux_status(self, restorecon=paths.RESTORECON):
-        pass  # FIXME: Implement after libexec move
-
     def set_nisdomain(self, nisdomain):
         nis_variable = "NETCONFIG_NIS_STATIC_DOMAIN"
         try:
@@ -40,9 +34,6 @@ class SuseTaskNamespace(RedHatTaskNamespace):
 
         with open(paths.SYSCONF_NETWORK, "w") as f:
             f.writelines(content)
-
-    def set_selinux_booleans(self, required_settings, backup_func=None):
-        return False  # FIXME: Implement after libexec move
 
     def modify_nsswitch_pam_stack(self, sssd, mkhomedir, statestore,
                                   sudo=True, subid=False):
