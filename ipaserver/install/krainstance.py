@@ -60,9 +60,8 @@ class KRAInstance(DogtagInstance):
     """
     We assume that the CA has already been installed, and we use the
     same tomcat instance to host both the CA and KRA.
-    The mod_nss database will contain the RA agent cert that will be used
-    to do authenticated requests against dogtag.  The RA agent cert will
-    be the same for both the CA and KRA.
+    The same RA agent certificate used with the CA will be used for the
+    KRA.
     """
 
     # Mapping of nicknames for tracking requests, and the profile to

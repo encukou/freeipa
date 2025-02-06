@@ -278,13 +278,8 @@ class InconsistentCRLGenConfigException(Exception):
 class CAInstance(DogtagInstance):
     """
     When using a dogtag CA the DS database contains just the
-    server cert for DS. The mod_nss database will contain the RA agent
-    cert that will be used to do authenticated requests against dogtag.
-
-    This is done because we use python-nss and will inherit the opened
-    NSS database in mod_python. In nsslib.py we do an nssinit but this will
-    return success if the database is already initialized. It doesn't care
-    if the database is different or not.
+    server cert for DS. The RA agent cert that will be used
+    to do authenticated requests against dogtag.
 
     external is a state machine:
        0 = not an externally signed CA
