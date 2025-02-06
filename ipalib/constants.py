@@ -204,6 +204,9 @@ DEFAULT_CONFIG = (
     # Web Application mount points
     ('mount_ipa', '/ipa/'),
 
+    # Web Multi-Home support
+    ('allowed_referers', None),
+
     # WebUI stuff:
     ('webui_prod', True),
 

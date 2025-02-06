@@ -96,7 +96,20 @@ Specifies whether the CA is acting as an RA agent, such as when dogtag is being 
 Specifies whether an IPA client should attempt to fall back and try other services if the first connection fails.
 .TP
 .B host <hostname>
-Specifies the local system hostname.
+Specifies the local system hostname. This is the primary accepted Referer, others hostnames can be configured below.
+.TP
+.B allowed_referers [<hostname>[,<hostname>][,<hostname>:<exotic_port>][,<hostname>:<exotic_port>[/path]][...]]
+Specifies additional allowed hostnames that can be referred to in the Referer HTTP header. This setting allows to access the application from multiple leg (behind reverse-proxy or multiple FQDN). Please note that TLS server certificate used by IPA web server must also include these hostnames or otherwise direct HTTPS connection using the alternative names will not be trusted by your browers.
+.RS
+.IP
+allowed_referers = ipa.demo1.freeipa.org:443,ipa.demo1.local,ipa.demo1.freeipa.org:443/sub_folder
+.RE
+.IP
+Here it is an example of the X509v3 Subject Alternative Name extension filled for certificate request using OpenSSL/LibreSSL:
+.RS
+.IP
+subjectAltName = DNS:ipa.demo1.freeipa.org,DNS:ipa.demo1.local
+.RE
 .TP
 .B http_timeout <seconds>
 Timeout for HTTP blocking requests (e.g. connection). The default value is 30 seconds.

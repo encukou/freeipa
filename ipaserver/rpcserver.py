@@ -160,8 +160,13 @@ class HTTP_Status(plugable.Plugin):
         if "HTTP_REFERER" not in environ:
             logger.error("Rejecting request with missing Referer")
             return False
+        allowed_referers = getattr(self.api.env, 'allowed_referers', '')
+        allowed_referers = allowed_referers or ''
+        allowed_referers = allowed_referers.split(',')
         if (not environ["HTTP_REFERER"].startswith(
                 "https://%s/ipa" % self.api.env.host)
+                and all(not environ["HTTP_REFERER"].startswith(
+                    "https://%s/ipa" % host) for host in allowed_referers)
                 and not self.env.in_tree):
             logger.error("Rejecting request with bad Referer %s",
                          environ["HTTP_REFERER"])
@@ -388,7 +393,14 @@ class WSGIExecutioner(Executioner):
         e = None
         if 'HTTP_REFERER' not in environ:
             return self.marshal(result, RefererError(referer='missing'), _id)
-        if not environ['HTTP_REFERER'].startswith('https://%s/ipa' % self.api.env.host) and not self.env.in_tree:
+        allowed_referers = getattr(self.api.env, 'allowed_referers', '')
+        allowed_referers = allowed_referers or ''
+        allowed_referers = allowed_referers.split(',')
+        if (not environ["HTTP_REFERER"].startswith(
+                "https://%s/ipa" % self.api.env.host)
+                and all(not environ["HTTP_REFERER"].startswith(
+                    "https://%s/ipa" % host) for host in allowed_referers)
+                and not self.env.in_tree):
             return self.marshal(result, RefererError(referer=environ['HTTP_REFERER']), _id)
         if self.api.env.debug:
             time_start = time.perf_counter_ns()
