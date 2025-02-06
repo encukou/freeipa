@@ -276,7 +276,7 @@ def update_db(path, certs):
     for name, flags in db.list_certs():
         if flags.ca:
             db.delete_cert(name)
-    for cert, nickname, trusted, eku in certs:
+    for cert, nickname, trusted, eku, _serial in certs:
         trust_flags = certstore.key_policy_to_trust_flags(trusted, True, eku)
         try:
             db.add_cert(cert, nickname, trust_flags)

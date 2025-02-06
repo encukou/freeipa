@@ -3133,15 +3133,15 @@ def _install(options, tdict):
         ca_certs = certstore.make_compat_ca_certs(ca_certs, cli_realm,
                                                   ca_subject)
     ca_certs_trust = [(c, n, certstore.key_policy_to_trust_flags(t, True, u))
-                      for (c, n, t, u) in ca_certs]
+                      for (c, n, t, u, s) in ca_certs]
 
     x509.write_certificate_list(
-        [c for c, n, t, u in ca_certs if t is not False],
+        [c for c, n, t, u, s in ca_certs if t is not False],
         paths.KDC_CA_BUNDLE_PEM,
         mode=0o644
     )
     x509.write_certificate_list(
-        [c for c, n, t, u in ca_certs if t is not False],
+        [c for c, n, t, u, s in ca_certs if t is not False],
         paths.CA_BUNDLE_PEM,
         mode=0o644
     )

@@ -15,23 +15,6 @@ default:nsslapd-pluginId: NSUniqueAttr
 default:nsslapd-pluginVersion: 1.1.0
 default:nsslapd-pluginVendor: Fedora Project
 
-dn: cn=certificate store subject uniqueness,cn=plugins,cn=config
-default:objectClass: top
-default:objectClass: nsSlapdPlugin
-default:objectClass: extensibleObject
-default:cn: certificate store subject uniqueness
-default:nsslapd-pluginDescription: Enforce unique attribute values
-default:nsslapd-pluginPath: libattr-unique-plugin
-default:nsslapd-pluginInitfunc: NSUniqueAttr_Init
-default:nsslapd-pluginType: preoperation
-default:nsslapd-pluginEnabled: on
-default:uniqueness-attribute-name: ipaCertSubject
-default:uniqueness-subtrees: cn=certificates,cn=ipa,cn=etc,$SUFFIX
-default:nsslapd-plugin-depends-on-type: database
-default:nsslapd-pluginId: NSUniqueAttr
-default:nsslapd-pluginVersion: 1.1.0
-default:nsslapd-pluginVendor: Fedora Project
-
 dn: cn=certificate store issuer/serial uniqueness,cn=plugins,cn=config
 default:objectClass: top
 default:objectClass: nsSlapdPlugin
@@ -128,3 +111,7 @@ default:nsslapd-plugin-depends-on-type: database
 default:nsslapd-pluginId: NSUniqueAttr
 default:nsslapd-pluginVersion: 1.1.0
 default:nsslapd-pluginVendor: Fedora Project
+
+# A unique ipaCertSubject is no longer required
+dn: cn=certificate store subject uniqueness,cn=plugins,cn=config
+deleteentry: cn=certificate store subject uniqueness,cn=plugins,cn=config
