@@ -121,17 +121,24 @@ class BINDMgr:
         assert attrs.get('idnsseckeyzone', [b'FALSE'])[0] == b'TRUE', \
             b'object %s is not a DNS zone key' % attrs['dn']
 
-        uri = b"%s;pin-source=%s" % (
-            attrs['idnsSecKeyRef'][0],
-            paths.DNSSEC_SOFTHSM_PIN.encode('utf-8')
-        )
+        uri = None
+        if platformconstants.NAMED_OPENSSL_ENGINE is not None:
+            uri = "%s;pin-source=%s" % (
+                attrs['idnsSecKeyRef'][0],
+                paths.DNSSEC_SOFTHSM_PIN.encode('utf-8')
+            )
+        elif platformconstants.NAMED_OPENSSL_PROVIDER is not None:
+            uri = "%s;token=%s" % (
+                attrs['idnsSecKeyRef'][0],
+                ipalib.constants.SOFTHSM_DNSSEC_TOKEN_LABEL.encode('utf-8')
+            )
         cmd = [
             paths.DNSSEC_KEYFROMLABEL,
-            '-E', 'pkcs11',
             '-K', workdir,
-            '-a', attrs['idnsSecAlgorithm'][0],
-            '-l', uri
+            '-a', attrs['idnsSecAlgorithm'][0].encode('utf-8'),
         ]
+        if uri is not None:
+            cmd.extend(['-l', uri])
         cmd.extend(self.dates2params(attrs))
         if attrs.get('idnsSecKeySep', [b'FALSE'])[0].upper() == b'TRUE':
             cmd.extend(['-f', 'KSK'])

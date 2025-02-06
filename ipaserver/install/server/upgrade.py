@@ -549,15 +549,19 @@ def ca_initialize_hsm_state(ca):
 
 def dnssec_set_openssl_engine(dnskeysyncd):
     """
-    Setup OpenSSL engine for BIND
+    Setup OpenSSL engine or provider for BIND
     """
-    if constants.NAMED_OPENSSL_ENGINE is None:
+    if all([constants.NAMED_OPENSSL_ENGINE is None,
+            constants.NAMED_OPENSSL_PROVIDER is None]):
         return False
 
-    if sysupgrade.get_upgrade_state('dns', 'openssl_engine'):
+    # Nothing to do if we are using OpenSSL engine already and not on the OS
+    # that requires OpenSSL provider instead.
+    if all([sysupgrade.get_upgrade_state('dns', 'openssl_engine'),
+            constants.NAMED_OPENSSL_PROVIDER is None]):
         return False
 
-    logger.info('[Set OpenSSL engine for BIND]')
+    logger.info('[Set OpenSSL engine or provider for BIND]')
     dnskeysyncd.setup_named_openssl_conf()
     dnskeysyncd.setup_named_sysconfig()
     dnskeysyncd.setup_ipa_dnskeysyncd_sysconfig()
