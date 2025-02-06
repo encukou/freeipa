@@ -315,3 +315,39 @@ class TestIDPKeycloak(IntegrationTest):
             tasks.kinit_admin(self.master)
             self.master.run_command(["rm", "-rf", backup_path])
             self.master.run_command(["ipa", "idp-del", "testidp"])
+
+    def test_ipaidpsub_attribute(self):
+        """
+        Test case to check if ipaIdpSub is correctly created
+        for IdP and non-IdP users
+
+        Related: https://pagure.io/freeipa/issue/9433
+        """
+        idp_user = "idpuser"
+        standard_user = "nonidpuser"
+
+        tasks.kinit_admin(self.master)
+        cmd = ["ipa", "idp-add", "testidp", "--provider=keycloak",
+               "--client-id=ipa_oidc_client", "--org=master",
+               "--base-url={0}:8443/auth".format(self.client.hostname)]
+        self.master.run_command(cmd, stdin_text="{0}\n{0}".format(
+            self.client.config.admin_password))
+        tasks.user_add(self.master, idp_user,
+                       extra_args=["--user-auth-type=idp",
+                                   "--idp-user-id=testuser1@ipa.test",
+                                   "--idp=testidp"])
+        tasks.user_add(self.master, standard_user)
+
+        # Add idp-user-id to non-idp user
+        cmd = ["ipa", "user-mod", standard_user,
+               "--idp-user-id=new.mydomain.test"]
+        list_user = self.master.run_command(cmd).stdout_text
+        assert "External IdP user identifier: new.mydomain.test" in list_user
+
+        # remove IdP and change idp-user-id for IdP user
+        cmd = ["ipa", "idp-del", "keycloak"]
+        self.master.run_command(cmd)
+        cmd = ["ipa", "user-show", idp_user]
+        list_user = self.master.run_command(cmd).stdout_text
+        assert "User authentication types: idp" not in list_user
+        assert "External IdP user identifier: testuser1@ipa.test" in list_user
