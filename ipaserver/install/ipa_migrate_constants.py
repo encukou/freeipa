@@ -71,6 +71,7 @@ IGNORE_ATTRS = [
     'serverhostname',
     'krbpasswordexpiration',
     'krblastadminunlock',
+    'krbpwdpolicyreference',  # COS attribute
 ]
 
 # For production mode, bring everything over

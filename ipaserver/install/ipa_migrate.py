@@ -1461,6 +1461,10 @@ class IPAMigrate():
             if DN(exclude_dn) in DN(entry_dn):
                 return
 
+        # Skip tombstones
+        if 'nsTombstone' in entry_attrs['objectClass']:
+            return
+
         # Determine entry type: user, group, hbac, etc
         entry_type = self.get_entry_type(entry_dn, entry_attrs)
         if entry_type is None:
@@ -1567,6 +1571,10 @@ class IPAMigrate():
                     stats['custom'] += 1
                 else:
                     DB_OBJECTS[entry_type]['count'] += 1
+            except errors.MidairCollision as e:
+                # Typically means no such attribute, ok to ignore
+                self.log_debug(f'Failed to update "{local_dn}" error: '
+                               f'{str(e)} - ok to ignore')
             except errors.ExecutionError as e:
                 self.log_error(f'Failed to update "{local_dn}" error: '
                                f'{str(e)}')
