@@ -1469,10 +1469,47 @@ cli_plugins = (
 )
 
 
+def acquire_cred_interactively(*, api, principal, ccache, interactive, **kw):
+    # If it is not an interactive run, re-raise the original exception
+    # because we have no way to acquire credentials.
+    if not interactive:
+        raise kw['exc']()
+
+    from gssapi import Name, NameType
+    from gssapi.raw import (acquire_cred_from,
+                            store_cred, store_cred_into)
+
+    if principal is None or api.env.prompt_all:
+        default = str(principal) if principal is not None else os.getlogin()
+        principal = api.Backend.textui.prompt('Username',
+                                              default=default)
+        if not principal:
+            principal = default
+
+    password = api.Backend.textui.prompt_password('Password', False)
+    name = Name(principal, NameType.kerberos_principal)
+    store = {'password': password.encode('utf-8')}
+    acquire_credentials = acquire_cred_from(store, name, usage='initiate')
+    credentials = acquire_credentials.creds
+    # Store credentials in the cache
+    if not ccache:
+        store_cred(credentials, usage='initiate',
+                   overwrite=True, set_default=True)
+    else:
+        store = {'ccache': ccache}
+        store_cred_into(store, credentials,
+                        usage='initiate', overwrite=True)
+
+
 def run(api):
     error = None
     try:
-        (_options, argv) = api.bootstrap_with_global_options(context='cli')
+        acquire_cred_override = {
+            'acquire_cred': acquire_cred_interactively
+        }
+        (_options, argv) = api.bootstrap_with_global_options(
+            context='cli',
+            additional_overrides=acquire_cred_override)
 
         try:
             check_client_configuration(env=api.env)

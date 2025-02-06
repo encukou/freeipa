@@ -586,10 +586,11 @@ class API(ReadOnly):
 
         return parser
 
-    def bootstrap_with_global_options(self, parser=None, context=None):
+    def bootstrap_with_global_options(self, parser=None, context=None,
+                                      additional_overrides=None):
         parser = self.build_global_parser(parser, context)
         (options, args) = parser.parse_args()
-        overrides = {}
+        overrides = additional_overrides or {}
         if options.env is not None:
             assert type(options.env) is list
             for item in options.env:

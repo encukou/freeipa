@@ -7,12 +7,14 @@ import re
 import time
 
 import gssapi
+import ctypes
 
 from ipapython.kerberos import Principal
+import ipapython.kerberos as krb5
 from ipaplatform.paths import paths
 from ipapython.ipautil import run
 from ipalib.constants import PATTERN_GROUPUSER_NAME
-from ipalib import krb_utils
+from ipalib import api, cli, krb_utils
 from ipalib.util import validate_hostname
 
 logger = logging.getLogger(__name__)
@@ -238,3 +240,28 @@ def kinit_pkinit(
     # prompt.
     env = _run_env(config)
     return run(args, env=env, stdin="\n", raiseonerr=True, capture_error=True)
+
+
+@krb5.krb5_prompter_fct
+def _kinit_default_callback(context, data, name, banner, num_prompts, prompts):
+    textui = cli.textui(api)
+    if name:
+        textui.print_name(name.decode('utf-8'))
+    if banner:
+        textui.print_summary(banner.decode('utf-8'))
+
+    for i in range(num_prompts):
+        prompt = prompts[i].prompt.decode('utf-8')
+        if prompts[i].hidden:
+            reply = textui.prompt_password(prompt, confirm=False)
+        else:
+            reply = textui.prompt(prompt)
+        if reply:
+            # create_string_buffer will have '\0' trailer
+            buf = ctypes.create_string_buffer(reply.encode("utf-8"))
+            r = prompts[i].reply.contents
+            # C string size without '\0' trailer
+            r.length = len(buf) - 1
+            # Copy the whole string, including the trailer
+            ctypes.memmove(r.data, buf, r.length + 1)
+    return 0

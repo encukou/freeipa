@@ -49,6 +49,7 @@ from cryptography import x509 as crypto_x509
 import gssapi
 from dns.exception import DNSException
 import six
+import sys
 
 from ipalib.backend import Connectible
 from ipalib.constants import LDAP_GENERALIZED_TIME_FORMAT
@@ -362,6 +363,7 @@ class MultiProtocolTransport(Transport):
     def __init__(self, *args, **kwargs):
         Transport.__init__(self)
         self.protocol = kwargs.get('protocol', None)
+        self.api = kwargs.get('api', None)
 
     def getparser(self):
         if self.protocol == 'json':
@@ -447,6 +449,27 @@ class KerbTransport(SSLTransport):
         self.service = kwargs.pop("service", "HTTP")
         self.ccache = kwargs.pop("ccache", None)
 
+    def _try_acquire_cred(self, service, exc):
+        if callable(self.api.env.acquire_cred):
+            interactive = (self.api.env.interactive
+                           and sys.stdin.isatty()) or self.api.env.prompt_all
+            principal = getattr(context, 'principal', None)
+            if service is None and self._connection is not None:
+                # We've been through make_connection() already
+                _service = self.get_service()
+            else:
+                _service = service
+            self.api.env.acquire_cred(
+                api=self.api,
+                context=context,
+                transport=self,
+                principal=principal,
+                ccache=self.ccache,
+                service=_service,
+                interactive=interactive,
+                exc=exc)
+            raise errors.NonFatalError(reason='credentials acquired')
+
     def _handle_exception(self, e, service=None):
         minor = e.min_code
         if minor == KRB5KDC_ERR_S_PRINCIPAL_UNKNOWN:
@@ -454,6 +477,7 @@ class KerbTransport(SSLTransport):
         elif minor == KRB5_FCC_NOFILE:
             raise errors.NoCCacheError()
         elif minor == KRB5KRB_AP_ERR_TKT_EXPIRED:
+            self._try_acquire_cred(service, errors.TicketExpired)
             raise errors.TicketExpired()
         elif minor == KRB5_FCC_PERM:
             raise errors.BadCCachePerms()
@@ -462,12 +486,13 @@ class KerbTransport(SSLTransport):
         elif minor == KRB5_REALM_CANT_RESOLVE:
             raise errors.CannotResolveKDC()
         elif minor == KRB5_CC_NOTFOUND:
+            self._try_acquire_cred(service, errors.CCacheError)
             raise errors.CCacheError()
         else:
             raise errors.KerberosError(message=unicode(e))
 
-    def _get_host(self):
-        return self._connection[0]
+    def _get_service(self):
+        return self.service + "@" + self._connection[0].split(':')[0]
 
     def _remove_extra_header(self, name):
         for (h, v) in self._extra_headers:
@@ -492,8 +517,7 @@ class KerbTransport(SSLTransport):
                 return
 
         # Set the remote host principal
-        host = self._get_host()
-        service = self.service + "@" + host.split(':')[0]
+        service = self._get_service()
 
         try:
             creds = None
@@ -505,7 +529,11 @@ class KerbTransport(SSLTransport):
                                                        flags=self.flags)
             response = self._sec_context.step()
         except gssapi.exceptions.GSSError as e:
-            self._handle_exception(e, service=service)
+            try:
+                self._handle_exception(e, service=service)
+            except errors.NonFatalError:
+                self.get_auth_info(use_cookie=use_cookie)
+                return
 
         self._set_auth_header(response)
 
@@ -923,7 +951,8 @@ class RPCClient(Connectible):
                 else:
                     transport_class = LanguageAwareTransport
                 proxy_kw['transport'] = transport_class(
-                    protocol=self.protocol, service='HTTP', ccache=ccache)
+                    protocol=self.protocol, service='HTTP', ccache=ccache,
+                    api=self.api)
                 logger.debug('trying %s', url)
                 setattr(context, 'request_url', url)
                 serverproxy = self.server_proxy_class(url, **proxy_kw)

@@ -8,7 +8,7 @@ Test the `session_storage.py` module.
 import pytest
 
 from ipapython import session_storage
-
+from ipapython.kerberos import KRB5Error
 
 @pytest.mark.skip_ipaclient_unittest
 @pytest.mark.needs_ipaapi
@@ -37,5 +37,5 @@ class test_session_storage:
         session_storage.remove_data(self.principal, self.key)
         try:
             session_storage.get_data(self.principal, self.key)
-        except session_storage.KRB5Error:
+        except KRB5Error:
             pass

@@ -291,6 +291,8 @@ DEFAULT_CONFIG = (
     ('logdir', object),  # Directory containing log files
     ('log', object),  # Path to context specific log file
 
+    # API-specific callbacks
+    ('acquire_cred', None),  # callback object
 )
 
 LDAP_GENERALIZED_TIME_FORMAT = "%Y%m%d%H%M%SZ"

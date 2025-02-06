@@ -32,6 +32,7 @@ import os
 import re
 import inspect
 import operator
+import textwrap
 
 from ipalib import api
 from ipalib.parameters import Param
@@ -40,7 +41,7 @@ from ipalib.text import Gettext, NGettext, ConcatenatedLazyText
 from ipalib.capabilities import capabilities
 from ipapython import config
 
-API_FILE='API.txt'
+API_FILE = 'API.txt'
 
 API_FILE_DIFFERENCE = 1
 API_NEW_COMMAND = 2
@@ -84,16 +85,19 @@ OUTPUT_IGNORED_ATTRIBUTES = (
     'flags',
 )
 
+
 def parse_options():
     parser = config.IPAOptionParser()
     parser.add_option("--validate", dest="validate", action="store_true",
-        default=False, help="Validate the API vs the stored API")
+                      default=False, help="Validate the API vs the stored API")
 
-    parser.add_option("--no-validate-doc", dest="validate_doc", action="store_false",
-        default=True, help="Do not validate documentation")
+    parser.add_option("--no-validate-doc", dest="validate_doc",
+                      action="store_false", default=True,
+                      help="Do not validate documentation")
 
     options, args = parser.parse_args()
     return options, args
+
 
 def param_repr(p):
     """
@@ -217,26 +221,29 @@ def validate_doc():
             src_file = inspect.getsourcefile(cmd_class)
             line_num = inspect.getsourcelines(cmd_class)[1]
             n_missing_cmd_doc += 1
-            print("%s:%d command \"%s\" has no doc" % (src_file, line_num, cmd.name))
+            print("%s:%d command \"%s\" has no doc" % (
+                  src_file, line_num, cmd.name))
         # Yes the command has doc, but is it internationalized?
         elif not is_i18n(cmd.doc):
             src_file = inspect.getsourcefile(cmd_class)
             line_num = inspect.getsourcelines(cmd_class)[1]
             n_missing_cmd_i18n += 1
-            print("%s:%d command \"%s\" doc is not internationalized" % (src_file, line_num, cmd.name))
+            print("%s:%d command \"%s\" doc is not internationalized" % (
+                  src_file, line_num, cmd.name))
 
     # If any errors, emit summary information and adjust return value
     if n_missing_cmd_doc > 0 or n_missing_cmd_i18n > 0:
         rval = API_DOC_ERROR
-        print("%d commands without doc, %d commands whose doc is not i18n" % \
+        print("%d commands without doc, %d commands whose doc is not i18n" %
               (n_missing_cmd_doc, n_missing_cmd_i18n))
 
     if n_missing_mod_doc > 0 or n_missing_mod_i18n > 0:
         rval = API_DOC_ERROR
-        print("%d modules without doc, %d modules whose doc is not i18n" % \
+        print("%d modules without doc, %d modules whose doc is not i18n" %
               (n_missing_mod_doc, n_missing_mod_i18n))
 
     return rval
+
 
 def make_api():
     """
@@ -245,7 +252,8 @@ def make_api():
     fd = open(API_FILE, 'w')
     for cmd in api.Command():
         fd.write('command: %s\n' % cmd.full_name)
-        fd.write('args: %d,%d,%d\n' % (len(cmd.args), len(cmd.options), len(cmd.output)))
+        fd.write('args: %d,%d,%d\n' % (len(cmd.args),
+                                       len(cmd.options), len(cmd.output)))
         for a in cmd.args():
             fd.write('arg: %s\n' % param_repr(a))
         for o in sorted(cmd.options(), key=operator.attrgetter('name')):
@@ -355,7 +363,8 @@ def make_api_reference(validate_only=False):
     api_contents["doc/api/parameters.rst"] = "\n".join(param_lines)
 
     def generate_param_type_text(obj):
-        # If class is part of IPA Params, return text with ref, if not just return its name
+        # If class is part of IPA Params, return text with ref,
+        # if not just return its name
         if type(obj) in ipa_classes:
             return ":ref:`{n}<{n}>`".format(n=type(obj).__name__)
         else:
@@ -366,15 +375,16 @@ def make_api_reference(validate_only=False):
         lines = []
         lines.append("# %s" % cmd.name)
 
-        doc_stripped =  '\n'.join([s.strip() for s in str(cmd.doc).splitlines()])
+        doc_stripped = '\n'.join([s.strip() for s in str(cmd.doc).splitlines()])
         lines.append(doc_stripped)
 
         lines.append("\n### Arguments")
         try:
-            next(cmd.args()) # if empty, StopIteration is thrown
+            next(cmd.args())  # if empty, StopIteration is thrown
             table_rows = [["Name", "Type", "Required"]]
             for a in cmd.args():
-                table_rows.append([a.name, generate_param_type_text(a), str(a.required)])
+                table_rows.append(
+                    [a.name, generate_param_type_text(a), str(a.required)])
             lines.extend(make_md_table(table_rows))
         except StopIteration:
             lines.append("No arguments.")
@@ -382,9 +392,12 @@ def make_api_reference(validate_only=False):
         lines.append("\n### Options")
         try:
             next(cmd.options())
-            for o in sorted(cmd.options(), key=operator.attrgetter('required'), reverse=True):
+            for o in sorted(cmd.options(), key=operator.attrgetter('required'),
+                            reverse=True):
                 req_str = " **(Required)**" if o.required else ""
-                lines.append("* {} : {}{}".format(o.name, generate_param_type_text(o), req_str))
+                lines.append("* {} : {}{}".format(o.name,
+                                                  generate_param_type_text(o),
+                                                  req_str))
                 if hasattr(o, "default") and o.default is not None:
                     lines.append(" * Default: {}".format(o.default))
                 if hasattr(o, "values"):
@@ -409,7 +422,7 @@ def make_api_reference(validate_only=False):
                 # Read notes written to template
                 notes = f.read().split("//end)")[1].strip()
         except FileNotFoundError:
-                notes = notes_template
+            notes = notes_template
 
         out = class_template.format(
             automated_marker_start=automated_marker_start,
@@ -439,7 +452,7 @@ def find_name(line):
     could just eval() the line but we wouldn't have defined any validators
     or normalizers it may be using.
     """
-    m = re.match('^[a-zA-Z0-9]+\(\'([a-z][_a-z0-9?\*\+]*)\'.*', line)
+    m = re.match(r'^[a-zA-Z0-9]+\(\'([a-z][_a-z0-9?\*\+]*)\'.*', line)
     if m:
         name = m.group(1)
     else:
@@ -447,9 +460,10 @@ def find_name(line):
         name = ''
     return name
 
+
 def _finalize_command_validation(cmd, found_args, expected_args,
-                                      found_options, expected_options,
-                                      found_output, expected_output):
+                                 found_options, expected_options,
+                                 found_output, expected_output):
     passed = True
     # Check the args of the previous command.
     if len(found_args) != expected_args:
@@ -468,8 +482,9 @@ def _finalize_command_validation(cmd, found_args, expected_args,
     # Check if there is not a new arg/opt/output in previous command
     for a in cmd.args():
         if a.param_spec not in found_args:
-            print('Argument %s of command %s in ipalib, not in API file:\n%s' % (
-                a.param_spec, cmd.name, param_repr(a)))
+            print('Argument %s of command %s in ipalib, '
+                  'not in API file:\n%s' % (
+                      a.param_spec, cmd.name, param_repr(a)))
             passed = False
     for o in cmd.options():
         if o.param_spec not in found_options:
@@ -513,9 +528,12 @@ def validate_api():
         line = line.strip()
         if line.startswith('command:'):
             if cmd:
-                if not _finalize_command_validation(cmd, found_args, expected_args,
-                                      found_options, expected_options,
-                                      found_output, expected_output):
+                if not _finalize_command_validation(cmd, found_args,
+                                                    expected_args,
+                                                    found_options,
+                                                    expected_options,
+                                                    found_output,
+                                                    expected_output):
                     rval |= API_FILE_DIFFERENCE
 
             (arg, name) = line.split(': ', 1)
@@ -545,14 +563,16 @@ def validate_api():
                 else:
                     if a.name == arg:
                         found = True
-                        print('Arg in %s doesn\'t match.\nGot      %s\nExpected %s' % (
-                            name, param_repr(a), line))
+                        print('Arg in %s doesn\'t match.\n'
+                              'Got %s\nExpected %s' % (
+                                  name, param_repr(a), line))
                         rval |= API_FILE_DIFFERENCE
             if found:
                 found_args.append(arg)
             else:
                 arg = find_name(line)
-                print("Argument '%s' in command '%s' in API file not found" % (arg, name))
+                print("Argument '%s' in command '%s' "
+                      "in API file not found" % (arg, name))
                 rval |= API_FILE_DIFFERENCE
         if line.startswith('option:') and cmd:
             line = line.replace('option: ', '')
@@ -564,13 +584,15 @@ def validate_api():
                 else:
                     if o.name == option:
                         found = True
-                        print('Option in %s doesn\'t match. Got %s Expected %s' % (name, o, line))
+                        print('Option in %s doesn\'t match. '
+                              'Got %s Expected %s' % (name, o, line))
                         rval |= API_FILE_DIFFERENCE
             if found:
                 found_options.append(option)
             else:
                 option = find_name(line)
-                print("Option '%s' in command '%s' in API file not found" % (option, name))
+                print("Option '%s' in command '%s' "
+                      "in API file not found" % (option, name))
                 rval |= API_FILE_DIFFERENCE
         if line.startswith('output:') and cmd:
             line = line.replace('output: ', '')
@@ -582,13 +604,15 @@ def validate_api():
                 else:
                     if o.name == output:
                         found = True
-                        print('Output in %s doesn\'t match. Got %s Expected %s' % (name, o, line))
+                        print('Output in %s doesn\'t match. '
+                              'Got %s Expected %s' % (name, o, line))
                         rval |= API_FILE_DIFFERENCE
             if found:
                 found_output.append(output)
             else:
                 output = find_name(line)
-                print("Option '%s' in command '%s' in API file not found" % (output, name))
+                print("Option '%s' in command '%s' "
+                      "in API file not found" % (output, name))
                 rval |= API_FILE_DIFFERENCE
         if line.startswith('default:'):
             default = line.replace('default: ', '')
@@ -634,8 +658,8 @@ def validate_api():
 
     if cmd:
         if not _finalize_command_validation(cmd, found_args, expected_args,
-                              found_options, expected_options,
-                              found_output, expected_output):
+                                            found_options, expected_options,
+                                            found_output, expected_output):
             rval |= API_FILE_DIFFERENCE
 
     # Now look for new commands not in the current API
@@ -679,6 +703,7 @@ def validate_api_reference():
 
     return rval
 
+
 def main():
     rval = 0
     options, _args = parse_options()
@@ -717,18 +742,24 @@ def main():
 
     if rval & API_FILE_DIFFERENCE:
         print('')
-        print("There are one or more changes to the API.\n"
-              "Either undo the API changes or update API.txt, "
-              "API Reference, and increment the major version in VERSION.")
+        print(textwrap.dedent(
+              """There are one or more changes to the API.
+                 Either undo the API changes or update API.txt, "
+                 API Reference, and increment the major version in VERSION."""))
 
     if rval & API_NEW_COMMAND:
         print('')
-        print('There are one or more new commands defined.\nUpdate API.txt and increment the minor version in VERSION.')
+        print(textwrap.dedent(
+              '''There are one or more new commands defined.
+                 Update API.txt and increment the minor version in VERSION.'''))
 
     if rval & API_DOC_ERROR:
         print('')
-        print('There are one or more documentation problems.\nYou must fix these before preceeding')
+        print(textwrap.dedent(
+              '''There are one or more documentation problems.
+                 You must fix these before preceeding'''))
 
     return rval
+
 
 sys.exit(main())

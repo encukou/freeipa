@@ -268,7 +268,8 @@ class Env:
                 value = int(value)
             elif key == 'basedn':
                 value = DN(value)
-        if type(value) not in (unicode, int, float, bool, type(None), DN):
+        if not callable(value) and type(
+                value) not in (unicode, int, float, bool, type(None), DN):
             raise TypeError(key, value)
         object.__setattr__(self, key, value)
         # pylint: disable=no-member
