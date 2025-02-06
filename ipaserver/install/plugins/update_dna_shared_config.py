@@ -53,6 +53,11 @@ class update_dna_shared_config(Updater):
         else:
             logger.debug('Found DNA config %s', dna_config_base)
 
+        remote_bind_method = entry.single_value.get("dnaRemoteBindMethod")
+        if remote_bind_method is not None:
+            logger.error(
+                "dnaRemoteBindMethod is set on the global DNA entry already.")
+            return None
         sharedcfgdn = entry.single_value.get("dnaSharedCfgDN")
         if sharedcfgdn is not None:
             sharedcfgdn = DN(sharedcfgdn)
