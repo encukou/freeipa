@@ -1561,6 +1561,43 @@ class TestIPACommand(IntegrationTest):
 
         assert isrgrootx1_nick in result
 
+    def test_ipa_systemd_journal(self):
+        """
+        This testcase checks that administrative user credentials
+        is not leaked to journald log
+        """
+        server_cmds = (
+            ['ipa-server-install',
+             'ipa-adtrust-install',
+             'ipa-kra-install',
+             'ipa-restore',
+             'ipa-replica-manage',
+             'ipa-cs-replica-manage',
+             'ipa-server-certinstall',
+             ]
+        )
+        replica_cmds = (
+            ['ipa-replica-install',
+             'ipa-kra-install',
+             'ipa-adtrust-install'
+             ]
+        )
+        for cmd in server_cmds:
+            result = self.master.run_command(
+                ['journalctl', '-t', f'/usr/sbin/{cmd}', '-n1', '-o', 'json-pretty'],
+                raiseonerr=False
+            )
+            assert self.master.config.admin_password not in result.stdout_text
+            assert self.master.config.dirman_password not in result.stdout_text
+
+        for cmd in replica_cmds:
+            result = self.replicas[0].run_command(
+                ['journalctl', '-t', f'/usr/sbin/{cmd}', '-n1', '-o', 'json-pretty'],
+                raiseonerr=False
+            )
+            assert self.master.config.admin_password not in result.stdout_text
+            assert self.master.config.dirman_password not in result.stdout_text
+
 
 class TestIPACommandWithoutReplica(IntegrationTest):
     """
