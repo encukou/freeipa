@@ -28,6 +28,7 @@ import re
 import shutil
 import sys
 import time
+import textwrap
 
 import ldap
 import six
@@ -50,7 +51,7 @@ from ipapython.admintool import ScriptError
 import ipalib
 from ipalib import api, errors
 from ipalib.constants import IPA_CA_RECORD
-from ipalib.install import dnsforwarders
+from ipalib.install import dnsforwarders, certmonger
 from ipaplatform import services
 from ipaplatform.tasks import tasks
 from ipaplatform.constants import constants
@@ -668,14 +669,20 @@ class BindInstance(service.Service):
 
     def setup(self, fqdn, ip_addresses, realm_name, domain_name, forwarders,
               forward_policy, reverse_zones, zonemgr=None,
-              no_dnssec_validation=False):
+              no_dnssec_validation=False, dns_over_tls=False,
+              dns_over_tls_cert=None, dns_over_tls_key=None,
+              dns_policy=None):
         """Setup bindinstance for installation
         """
         self.setup_templating(
             fqdn=fqdn,
             realm_name=realm_name,
             domain_name=domain_name,
-            no_dnssec_validation=no_dnssec_validation
+            no_dnssec_validation=no_dnssec_validation,
+            dns_over_tls=dns_over_tls,
+            dns_over_tls_cert=dns_over_tls_cert,
+            dns_over_tls_key=dns_over_tls_key,
+            dns_policy=dns_policy
         )
         self.ip_addresses = ip_addresses
         self.forwarders = forwarders
@@ -688,7 +695,9 @@ class BindInstance(service.Service):
             self.zonemgr = normalize_zonemgr(zonemgr)
 
     def setup_templating(
-        self, fqdn, realm_name, domain_name, no_dnssec_validation=None
+        self, fqdn, realm_name, domain_name, no_dnssec_validation=None,
+        dns_over_tls=None, dns_over_tls_cert=None, dns_over_tls_key=None,
+        dns_policy=None
     ):
         """Setup bindinstance for templating
         """
@@ -698,6 +707,10 @@ class BindInstance(service.Service):
         self.host = fqdn.split(".")[0]
         self.suffix = ipautil.realm_to_suffix(self.realm)
         self.no_dnssec_validation = no_dnssec_validation
+        self.dns_over_tls = dns_over_tls
+        self.dns_over_tls_cert = dns_over_tls_cert
+        self.dns_over_tls_key = dns_over_tls_key
+        self.dns_policy = dns_policy
         self._setup_sub_dict()
 
     @property
@@ -872,6 +885,24 @@ class BindInstance(service.Service):
         else:
             crypto_policy = "// not available"
 
+        if self.dns_over_tls:
+            named_tls_conf = textwrap.dedent("""\
+                tls local-tls {{
+                    \tkey-file "{}";
+                    \tcert-file "{}";
+                }};
+            """).format(self.dns_over_tls_key, self.dns_over_tls_cert)
+            unencrypted_iface = ("127.0.0.1" if self.dns_policy == "enforced"
+                                 else "any")
+            named_tls_options = textwrap.dedent("""\
+                \tlisten-on { %s; };
+                \tlisten-on tls local-tls { any; };
+                \tlisten-on-v6 tls local-tls { any; };
+            """ % unencrypted_iface)
+        else:
+            named_tls_options = ""
+            named_tls_conf = ""
+
         self.sub_dict = dict(
             FQDN=self.fqdn,
             SERVER_ID=ipaldap.realm_to_serverid(self.realm),
@@ -891,6 +922,8 @@ class BindInstance(service.Service):
             NAMED_DATA_DIR=constants.NAMED_DATA_DIR,
             NAMED_ZONE_COMMENT=constants.NAMED_ZONE_COMMENT,
             NAMED_DNSSEC_VALIDATION=self._get_dnssec_validation(),
+            NAMED_DNS_OVER_TLS_OPTIONS_CONF=named_tls_options,
+            NAMED_DNS_OVER_TLS_CONF=named_tls_conf,
         )
 
     def __setup_dns_container(self):
@@ -1344,6 +1377,11 @@ class BindInstance(service.Service):
 
         self.named_conflict.unmask()
 
+        certmonger.stop_tracking(certfile=paths.BIND_DNS_OVER_TLS_CRT)
+        certmonger.stop_tracking(certfile=paths.BIND_DNS_OVER_TLS_KEY)
+        services.knownservices.unbound.disable()
+        services.knownservices.unbound.stop()
+
         ipautil.remove_file(paths.NAMED_CONF_BAK)
         ipautil.remove_file(paths.NAMED_CUSTOM_CONF)
         ipautil.remove_file(paths.NAMED_CUSTOM_OPTIONS_CONF)
@@ -1357,6 +1395,8 @@ class BindInstance(service.Service):
                 pass
         except ValueError:
             pass
+        ipautil.remove_file(paths.BIND_DNS_OVER_TLS_CRT)
+        ipautil.remove_file(paths.BIND_DNS_OVER_TLS_KEY)
         ipautil.remove_keytab(self.keytab)
 
         ipautil.remove_ccache(run_as=self.service_user)

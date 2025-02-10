@@ -1,0 +1,10 @@
+server:
+    tls-cert-bundle: $TLS_CERT_BUNDLE_PATH
+    tls-upstream: yes
+    interface: 127.0.0.55
+    log-servfail: yes
+forward-zone:
+    name: "."
+    forward-tls-upstream: yes
+    forward-first: no
+    $FORWARD_ADDRS

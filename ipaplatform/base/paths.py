@@ -102,6 +102,8 @@ class BasePathNamespace:
     NAMED_ROOT_KEY = "/etc/named.root.key"
     NAMED_MANAGED_KEYS_DIR = "/var/named/dynamic"
     NAMED_CRYPTO_POLICY_FILE = None
+    UNBOUND_CONF_SRC = '/usr/share/ipa/client/unbound.conf.template'
+    UNBOUND_CONF = "/etc/unbound/conf.d/zzz-ipa.conf"
     NSLCD_CONF = "/etc/nslcd.conf"
     NSS_LDAP_CONF = "/etc/nss_ldap.conf"
     NSSWITCH_CONF = "/etc/nsswitch.conf"
@@ -225,6 +227,8 @@ class BasePathNamespace:
     OPENSSL_DIR = "/etc/pki/tls"
     OPENSSL_CERTS_DIR = "/etc/pki/tls/certs"
     OPENSSL_PRIVATE_DIR = "/etc/pki/tls/private"
+    BIND_DNS_OVER_TLS_CRT = "/etc/pki/tls/certs/bind_dot.crt"
+    BIND_DNS_OVER_TLS_KEY = "/etc/pki/tls/private/bind_dot.key"
     PK12UTIL = "/usr/bin/pk12util"
     SOFTHSM2_UTIL = "/usr/bin/softhsm2-util"
     SSLGET = "/usr/bin/sslget"

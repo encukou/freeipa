@@ -5,6 +5,7 @@ dist_app_DATA =				\
 	freeipa.template		\
 	sshd_ipa.conf.template	\
 	ssh_ipa.conf.template	\
+	unbound.conf.template	\
 	$(NULL)
 
 epnconfdir = $(IPA_SYSCONF_DIR)

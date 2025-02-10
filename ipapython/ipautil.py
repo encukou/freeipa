@@ -266,6 +266,19 @@ class CheckedIPAddressLoopback(CheckedIPAddress):
                   file=sys.stderr)
 
 
+class IPAddressDoTForwarder(str):
+    """IPv4 or IPv6 address with added hostname as needed for DNS over TLS
+    configuration. Example: 1.2.3.4#dns.hostname.test
+    """
+    def __init__(self, addr):
+        addr_split = addr.split("#")
+        if len(addr_split) != 2 or not valid_ip(addr_split[0]):
+            raise ValueError(
+                "DoT forwarder must be in the format "
+                "of '1.2.3.4#dns.example.test'."
+            )
+
+
 def valid_ip(addr):
     return netaddr.valid_ipv4(addr) or netaddr.valid_ipv6(addr)
 

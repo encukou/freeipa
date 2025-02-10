@@ -21,6 +21,7 @@ from ipalib.install.service import (enroll_only,
 from ipapython.install import typing
 from ipapython.install.core import group, knob, extend_knob
 from ipapython.install.common import step
+from ipaplatform import services
 
 from .install import validate_admin_password, validate_dm_password
 from .install import get_min_idstart
@@ -442,6 +443,18 @@ class ServerInstallInterface(ServerCertificateInstallInterface,
                 raise RuntimeError(
                     "You cannot specify a --no-dnssec-validation option "
                     "without the --setup-dns option")
+            if self.dot_forwarders:
+                raise RuntimeError(
+                    "You cannot specify a --dot-forwarder option "
+                    "without the --setup-dns option")
+            if self.dns_over_tls_cert:
+                raise RuntimeError(
+                    "You cannot specify a --dns-over-tls-cert option "
+                    "without the --setup-dns option")
+            if self.dns_over_tls_key:
+                raise RuntimeError(
+                    "You cannot specify a --dns-over-tls-key option "
+                    "without the --setup-dns option")
         elif self.forwarders and self.no_forwarders:
             raise RuntimeError(
                 "You cannot specify a --forwarder option together with "
@@ -458,7 +471,32 @@ class ServerInstallInterface(ServerCertificateInstallInterface,
             raise RuntimeError(
                 "You cannot specify a --auto-reverse option together with "
                 "--no-reverse")
-
+        elif self.dot_forwarders and not self.dns_over_tls:
+            raise RuntimeError(
+                "You cannot specify a --dot-forwarder option "
+                "without the --dns-over-tls option")
+        elif (self.dns_over_tls
+              and not services.knownservices["unbound"].is_installed()):
+            raise RuntimeError(
+                "To enable DNS over TLS, package ipa-server-encrypted-dns "
+                "must be installed."
+            )
+        elif self.dns_policy == "enforced" and not self.dns_over_tls:
+            raise RuntimeError(
+                "You cannot specify a --dns-policy option "
+                "without the --dns-over-tls option")
+        elif self.dns_over_tls_cert and not self.dns_over_tls:
+            raise RuntimeError(
+                "You cannot specify a --dns-over-tls-cert option "
+                "without the --dns-over-tls option")
+        elif self.dns_over_tls_key and not self.dns_over_tls:
+            raise RuntimeError(
+                "You cannot specify a --dns-over-tls-key option "
+                "without the --dns-over-tls option")
+        elif bool(self.dns_over_tls_key) != bool(self.dns_over_tls_cert):
+            raise RuntimeError(
+                "You cannot specify a --dns-over-tls-key option "
+                "without the --dns-over-tls-cert option and vice versa")
         if not self.setup_adtrust:
             if self.add_agents:
                 raise RuntimeError(
@@ -504,12 +542,18 @@ class ServerInstallInterface(ServerCertificateInstallInterface,
                         "In unattended mode you need to provide at least -r, "
                         "-p and -a options")
                 if self.setup_dns:
-                    if (not self.forwarders and
-                            not self.no_forwarders and
-                            not self.auto_forwarders):
+                    if (not self.forwarders
+                            and not self.no_forwarders
+                            and not self.auto_forwarders
+                            and not self.dot_forwarders):
                         raise RuntimeError(
                             "You must specify at least one of --forwarder, "
-                            "--auto-forwarders, or --no-forwarders options")
+                            "--auto-forwarders, --dot-forwarder or "
+                            "--no-forwarders options")
+                    elif self.dns_over_tls and not self.dot_forwarders:
+                        raise RuntimeError(
+                            "You must specify --dot-forwarder "
+                            "when enabling DNS over TLS")
 
             any_ignore_option_true = any(
                 [self.ignore_topology_disconnect, self.ignore_last_of_role])
@@ -541,10 +585,12 @@ class ServerInstallInterface(ServerCertificateInstallInterface,
             if self.setup_dns:
                 if (not self.forwarders and
                         not self.no_forwarders and
-                        not self.auto_forwarders):
+                        not self.auto_forwarders
+                        and not self.dot_forwarders):
                     raise RuntimeError(
                         "You must specify at least one of --forwarder, "
-                        "--auto-forwarders, or --no-forwarders options")
+                        "--auto-forwarders, --dot-forwarder, "
+                        "or --no-forwarders options")
 
 
 ServerMasterInstallInterface = installs_master(ServerInstallInterface)

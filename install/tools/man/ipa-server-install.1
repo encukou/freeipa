@@ -252,6 +252,22 @@ Disable DNSSEC validation on this server.
 .TP
 \fB\-\-allow\-zone\-overlap\fR
 Allow creation of (reverse) zone even if the zone is already resolvable. Using this option is discouraged as it result in later problems with domain name resolution.
+.TP
+\fB\-\-dns\-over\-tls\fR
+Configure DNS over TLS.
+.TP
+\fB\-\-dot\-forwarder\fR=\fIIP_ADDRESS#HOSTNAME\fR
+Add a DNS-over-TLS-enabled forwarder in the format of ip#hostname, e.g.: dns.example.com#1.2.3.4. This option can be used multiple times.
+.TP
+\fB\-\-dns\-over\-tls\-cert\fR=\fIFILE\fR
+Certificate to use for DNS over TLS. If empty, a new certificate will be requested from IPA CA.
+.TP
+\fB\-\-dns\-over\-tls\-key\fR=\fIFILE\fR
+Key for the certificate specified in --dns-over-tls-key.
+.TP
+\fB\-\-dns\-policy\fR=\fIrelaxed|enforced\fR
+Encrypted DNS policy. If enforced, DNS communications will only be allowed through the configured encrypted DNS methods. If relaxed,
+unencrypted DNS queries will be allowed.
 
 .SS "SID GENERATION OPTIONS"
 .TP

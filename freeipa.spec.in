@@ -632,6 +632,7 @@ Requires: openssl-pkcs11 >= %{openssl_pkcs11_version}
 # See https://bugzilla.redhat.com/show_bug.cgi?id=1825812
 # RHEL 8.3+ and Fedora 32+ have 2.1
 Requires: opendnssec >= 2.1.6-5
+Recommends: %{name}-server-encrypted-dns
 %{?systemd_requires}
 
 Provides: %{alt_name}-server-dns = %{version}
@@ -644,6 +645,15 @@ Obsoletes: %{name}-server <= 4.2.0
 %description server-dns
 IPA integrated DNS server with support for automatic DNSSEC signing.
 Integrated DNS server is BIND 9. OpenDNSSEC provides key management.
+
+
+%package server-encrypted-dns
+Summary: support for encrypted DNS in IPA integrated DNS server
+Requires: %{name}-client-encrypted-dns
+
+%description server-encrypted-dns
+Provides support for enabling DNS over TLS in the IPA integrated DNS
+server.
 
 
 %package server-trust-ad
@@ -726,6 +736,7 @@ Requires: libnfsidmap
 Requires: (nfs-utils or nfsv4-client-utils)
 Requires: sssd-tools >= %{sssd_version}
 Requires(post): policycoreutils
+Recommends: %{name}-client-encrypted-dns
 
 # https://pagure.io/freeipa/issue/8530
 Recommends: libsss_sudo
@@ -766,6 +777,14 @@ and integration with Active Directory based infrastructures (Trusts).
 If your network uses IPA for authentication, this package should be
 installed on every client machine.
 This package provides command-line tools for IPA administrators.
+
+%package client-encrypted-dns
+Summary: Enable encrypted DNS support for clients
+Requires: unbound
+
+%description client-encrypted-dns
+This package enables support for installing clients with encrypted DNS
+via DNS over TLS.
 
 %package client-samba
 Summary: Tools to configure Samba on IPA client
@@ -1726,6 +1745,10 @@ fi
 %attr(644,root,root) %{_unitdir}/ipa-ods-exporter.socket
 %attr(644,root,root) %{_unitdir}/ipa-ods-exporter.service
 
+%files server-encrypted-dns
+%doc README.md Contributors.txt
+%license COPYING
+
 %files server-trust-ad
 %doc README.md Contributors.txt
 %license COPYING
@@ -1784,6 +1807,10 @@ fi
 %attr(644,root,root) %{_unitdir}/ipa-epn.timer
 %attr(600,root,root) %config(noreplace) %{_sysconfdir}/ipa/epn.conf
 %attr(644,root,root) %config(noreplace) %{_sysconfdir}/ipa/epn/expire_msg.template
+
+%files client-encrypted-dns
+%doc README.md Contributors.txt
+%license COPYING
 
 %files -n python3-ipaclient
 %doc README.md Contributors.txt

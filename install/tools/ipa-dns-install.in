@@ -27,6 +27,7 @@ import sys
 
 from ipaserver.install import bindinstance
 from ipaserver.install import installutils
+from ipaplatform import services
 from ipapython import version
 from ipalib import api
 from ipaplatform.paths import paths
@@ -56,6 +57,24 @@ def parse_options():
     parser.add_option("--auto-forwarders", dest="auto_forwarders",
                       action="store_true", default=False,
                       help="Use DNS forwarders configured in /etc/resolv.conf")
+    parser.add_option("--dns-over-tls", dest="dns_over_tls",
+                      help="Configure DNS over TLS", default=False,
+                      action="store_true")
+    parser.add_option("--dot-forwarder", dest="dot_forwarders",
+                      action="append",
+                      default=[],
+                      help="Add a DNS over TLS forwarder. "
+                      "This option can be used multiple times")
+    parser.add_option("--dns-over-tls-cert", dest="dns_over_tls_cert",
+                      help="Certificate to use for DNS over TLS. "
+                      "If empty, a new certificate will be requested "
+                      "from IPA CA")
+    parser.add_option("--dns-over-tls-key", dest="dns_over_tls_key",
+                      help="Key for certificate specified "
+                      "in --dns-over-tls-cert")
+    parser.add_option("--dns-policy", dest="dns_policy",
+                      choices=("relaxed", "enforced"), default="relaxed",
+                      help="Policy for encrypted DNS enforcement")
     parser.add_option("--forward-policy", dest="forward_policy",
                       choices=("first", "only"), default=None,
                       help="DNS forwarding policy for global forwarders")
@@ -102,12 +121,37 @@ def parse_options():
     elif options.auto_reverse and options.no_reverse:
         parser.error("You cannot specify a --auto-reverse option together with --no-reverse")
 
+    if options.dns_policy == "enforced" and not options.dns_over_tls:
+        parser.error("If encrypted DNS policy is enforced, "
+                     "--dns-over-tls must be specified.")
+
+    unbound = services.knownservices["unbound"]
+    if options.dns_over_tls and not unbound.is_installed():
+        parser.error(
+            "To enable DNS over TLS, package ipa-server-encrypted-dns "
+            "must be installed."
+        )
+
+    if not options.dns_over_tls and options.dot_forwarders:
+        parser.error("You cannot specify a "
+                     "--dot-forwarder option without --dns-over-tls")
+    elif options.dns_over_tls and not options.dot_forwarders:
+        parser.error(
+            "You must specify --dot-forwarder "
+            "when enabling DNS over TLS")
+    elif bool(options.dns_over_tls_key) != bool(options.dns_over_tls_cert):
+        parser.error(
+            "You cannot specify a --dns-over-tls-key option "
+            "without the --dns-over-tls-cert option and vice versa")
+
     if options.unattended:
         if (not options.forwarders
-            and not options.no_forwarders
-            and not options.auto_forwarders):
+                and not options.no_forwarders
+                and not options.auto_forwarders
+                and not options.dot_forwarders):
             parser.error("You must specify at least one option: "
-                "--forwarder or --no-forwarders or --auto-forwarders")
+                         "--forwarder or --no-forwarders or --auto-forwarders"
+                         " or --dot-forwarder")
 
     if options.kasp_db_file and not os.path.isfile(options.kasp_db_file):
         parser.error("File %s does not exist" % options.kasp_db_file)
