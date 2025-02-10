@@ -1088,19 +1088,6 @@ def remove_ds_ra_cert(subject_base):
     sysupgrade.set_upgrade_state('ds', 'remove_ra_cert', True)
 
 
-def migrate_to_mod_ssl(http):
-    logger.info('[Migrating from mod_nss to mod_ssl]')
-
-    if sysupgrade.get_upgrade_state('ssl.conf', 'migrated_to_mod_ssl'):
-        logger.info("Already migrated to mod_ssl")
-        return
-
-    http.migrate_to_mod_ssl()
-
-    sysupgrade.set_upgrade_state('ssl.conf', 'migrated_to_mod_ssl', True)
-
-
-
 def update_ipa_httpd_service_conf(http):
     logger.info('[Updating HTTPD service IPA configuration]')
     http.update_httpd_service_ipa_conf()
@@ -1874,7 +1861,6 @@ def upgrade_configuration():
     http.stop()
     update_ipa_httpd_service_conf(http)
     update_ipa_http_wsgi_conf(http)
-    migrate_to_mod_ssl(http)
     update_http_keytab(http)
     http.configure_gssproxy()
     http.start()

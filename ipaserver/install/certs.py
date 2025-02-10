@@ -34,8 +34,6 @@ import fcntl
 import time
 import datetime
 
-import six
-
 from ipalib.install import certmonger, sysrestore
 from ipapython import dogtag
 from ipapython import ipautil
@@ -726,6 +724,123 @@ class CertDB:
         """
         self.nssdb.convert_db()
 
+    def pki_issue_certificate(self, service, profile, subject,
+                              keyfile, certfile, key_passwd_file=None,
+                              dns_2_san='', use_admin=False):
+        """Use openssl to generate a CSR and submit it using the pki
+           cli tool.
+
+           There are effective two modes for this depending on the value
+           of use_admin. When use_admin is True we are issuing the RA
+           certificate using the CA admin certificate. When it is False
+           we are using the RA agent certificate to issue certificates for
+           services during installation.
+
+           use_admin = True
+              - service and profile can be None
+              - fetch the CA chain manually
+              - the request needs to be manually approved
+        """
+        def get_string(instring, key):
+            start = instring.find(key)
+            if start == -1:
+                raise RuntimeError(
+                    "Unable to find %s in output" % key)
+            return instring[start + len(key):].split()[0]
+
+        if use_admin:
+            nickname = 'ipa-ca-agent'
+        else:
+            ipautil.run(
+                [paths.OPENSSL, 'pkcs12', '-export',
+                 '-in', paths.RA_AGENT_PEM,
+                 '-out', os.path.join(self.secdir, 'agent.p12'),
+                 '-inkey', paths.RA_AGENT_KEY,
+                 '-name', 'IPA RA',
+                 '-password', 'file:{}'.format(self.passwd_fname),
+                 '-keypbe', 'AES-256-CBC',
+                 '-certpbe', 'AES-256-CBC',
+                 '-macalg', 'sha384',]
+            )
+
+            with open(self.passwd_fname, "r") as fd:
+                key_password = fd.read()
+            self.import_pkcs12(
+                os.path.join(self.secdir, 'agent.p12'),
+                pkcs12_passwd=key_password
+            )
+
+            if service == "krbtgt":
+                host = api.env.realm
+            else:
+                host = api.env.host
+
+            template = os.path.join(
+                paths.USR_SHARE_IPA_DIR, "openssl_cnf.template")
+            sub_dict = dict(
+                REALM=api.env.realm,
+                FQDN=host,
+                NICKNAME="Server-Cert",
+                PROFILE=profile,
+                SERVICE=service,
+                DNS_2=dns_2_san,
+            )
+            conf = ipautil.template_file(template, sub_dict)
+            destfile = os.path.join(self.secdir, "openssl.cnf")
+            with open(destfile, 'w') as f:
+                os.fchmod(f.fileno(), 0o600)
+                f.write(conf)
+
+            args = ["openssl", "req", "-new",
+                    "-out", os.path.join(self.secdir, "csr"),
+                    "-keyout", keyfile,
+                    "-config", destfile]
+            if key_passwd_file:
+                args.extend(["-passout", "file:{}".format(key_passwd_file)])
+            else:
+                args.extend(["-nodes"])
+            result = ipautil.run(args, capture_output=True)
+            nickname = 'IPA RA'
+
+        result = ipautil.run(
+            ["pki", "-d", self.secdir,
+             "-C", self.passwd_fname,
+             "-n", nickname,
+             "ca-cert-request-submit",
+             "--profile", profile,
+             "--subject", subject,
+             "--csr", os.path.join(self.secdir, "csr")],
+            capture_output=True)
+        if use_admin:
+            request_id = get_string(result.output, 'Request ID:')
+            status = get_string(result.output, 'Request Status:')
+            if status != "pending":
+                raise RuntimeError(
+                    "The certificate submission was not successful")
+            result = ipautil.run(
+                ["pki", "-C", self.passwd_fname,
+                 "-d", self.secdir,
+                 "-n", "ipa-ca-agent",
+                 "ca-cert-request-approve",
+                 "--force", request_id],
+                capture_output=True)
+
+        serial_number = get_string(result.output, 'Certificate ID:')
+        status = get_string(result.output, 'Operation Result:')
+        if status != "success":
+            raise RuntimeError(
+                "The certificate submission was not successful")
+
+        # The profile auto-issues so no need to approve it
+        result = ipautil.run(
+            ["pki",
+             "-d", self.secdir,
+             "ca-cert-export",
+             "--output-file", certfile,
+             "--output-format", "pem",
+             serial_number],
+            capture_output=True)
+
 
 class _CrossProcessLock:
     _DATETIME_FORMAT = '%Y%m%d%H%M%S%f'
@@ -791,10 +906,7 @@ class _CrossProcessLock:
 
     def _read(self, fileobj):
         p = configparser.RawConfigParser()
-        if six.PY2:
-            p.readfp(fileobj)  # pylint: disable=no-member
-        else:
-            p.read_file(fileobj)
+        p.read_file(fileobj)
 
         try:
             self._locked = p.getboolean('lock', 'locked')

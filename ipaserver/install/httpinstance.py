@@ -119,7 +119,6 @@ class HTTPInstance(service.Service):
 
         self.step("stopping httpd", self.__stop)
         self.step("backing up ssl.conf", self.backup_ssl_conf)
-        self.step("disabling nss.conf", self.disable_nss_conf)
         self.step("configuring mod_ssl certificate paths",
                   self.configure_mod_ssl_certs)
         self.step("setting mod_ssl protocol list",
@@ -222,33 +221,9 @@ class HTTPInstance(service.Service):
         tasks.configure_http_gssproxy_conf(IPAAPI_USER)
         services.knownservices.gssproxy.restart()
 
-    def get_mod_nss_nickname(self):
-        cert = directivesetter.get_directive(paths.HTTPD_NSS_CONF,
-                                             'NSSNickname')
-        nickname = directivesetter.unquote_directive_value(cert,
-                                                           quote_char="'")
-        return nickname
-
     def backup_ssl_conf(self):
         self.fstore.backup_file(paths.HTTPD_SSL_CONF)
         self.fstore.backup_file(paths.HTTPD_SSL_SITE_CONF)
-
-    def disable_nss_conf(self):
-        """
-        Backs up the original nss.conf file and replace it with the empty one.
-        Empty file avoids recreation of nss.conf in case the package is
-        reinstalled.
-
-        There is no safe way to co-exist since there is no safe port
-        to make mod_nss use, disable it completely.
-        """
-        if os.path.exists(paths.HTTPD_NSS_CONF):
-            # check that we don't have a backup already
-            # (mod_nss -> mod_ssl upgrade scenario)
-            if not self.fstore.has_file(paths.HTTPD_NSS_CONF):
-                self.fstore.backup_file(paths.HTTPD_NSS_CONF)
-
-        open(paths.HTTPD_NSS_CONF, 'w').close()
 
     def set_mod_ssl_protocol(self):
         tasks.configure_httpd_protocol()
@@ -275,8 +250,6 @@ class HTTPInstance(service.Service):
 
         ocsp_dir = aug.get(ocsp_path)
 
-        # there is SSLOCSPEnable directive in nss.conf file, comment it
-        # otherwise just do nothing
         if ocsp_dir is not None:
             ocsp_state = aug.get(ocsp_arg)
             aug.remove(ocsp_arg)
@@ -285,7 +258,6 @@ class HTTPInstance(service.Service):
             aug.save()
 
     def __add_include(self):
-        """This should run after __set_mod_nss_port so is already backed up"""
         if installutils.update_file(paths.HTTPD_SSL_SITE_CONF,
                                     '</VirtualHost>',
                                     'Include {path}\n'
@@ -366,25 +338,24 @@ class HTTPInstance(service.Service):
                 self.start_tracking_certificates()
 
             self.add_cert_to_service()
-
         else:
             if not self.promote:
-                ca_args = [
-                    paths.CERTMONGER_DOGTAG_SUBMIT,
-                    '--ee-url', 'https://%s:8443/ca/ee/ca' % self.fqdn,
-                    '--certfile', paths.RA_AGENT_PEM,
-                    '--keyfile', paths.RA_AGENT_KEY,
-                    '--cafile', paths.IPA_CA_CRT,
-                    '--agent-submit'
-                ]
-                helper = " ".join(ca_args)
-                prev_helper = certmonger.modify_ca_helper('IPA', helper)
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    tmpdb = certs.CertDB(api.env.realm, nssdir=tmpdir)
+                    tmpdb.create_from_cacert()
+                    dns_2 = f"DNS.2={IPA_CA_RECORD}.{api.env.domain}"
+                    tmpdb.pki_issue_certificate(
+                        "HTTP", dogtag.DEFAULT_PROFILE,
+                        str(DN(('CN', self.fqdn), self.subject_base)),
+                        paths.HTTPD_KEY_FILE, paths.HTTPD_CERT_FILE,
+                        key_passwd_file, dns_2_san=dns_2
+                    )
+
+                    self.start_tracking_certificates()
             else:
-                prev_helper = None
-            try:
                 # In migration case, if CA server is older version it may not
                 # have codepaths to support the ipa-ca.$DOMAIN dnsName in HTTP
-                # cert.  Therefore if request fails, try again without the
+                # cert.  Therefore if request fails, try again without them
                 # ipa-ca.$DOMAIN dnsName.
                 args = dict(
                     certpath=(paths.HTTPD_CERT_FILE, paths.HTTPD_KEY_FILE),
@@ -405,28 +376,9 @@ class HTTPInstance(service.Service):
                     args['dns'] = [self.fqdn]  # remove ipa-ca.$DOMAIN
                     args['stop_tracking_on_error'] = False
                     certmonger.request_and_wait_for_cert(**args)
-            finally:
-                if prev_helper is not None:
-                    certmonger.modify_ca_helper('IPA', prev_helper)
-            self.cert = x509.load_certificate_from_file(
-                paths.HTTPD_CERT_FILE
-            )
 
-            if prev_helper is not None:
-                self.add_cert_to_service()
-
-            with open(paths.HTTPD_KEY_FILE, 'rb') as f:
-                priv_key = x509.load_pem_private_key(
-                    f.read(), pkey_passwd, backend=x509.default_backend())
-
-            # Verify we have a valid server cert
-            if (priv_key.public_key().public_numbers()
-                    != self.cert.public_key().public_numbers()):
-                raise RuntimeError(
-                    "The public key of the issued HTTPD service certificate "
-                    "does not match its private key.")
-
-        sysupgrade.set_upgrade_state('ssl.conf', 'migrated_to_mod_ssl', True)
+            self.cert = x509.load_certificate_from_file(paths.HTTPD_CERT_FILE)
+            self.add_cert_to_service()
 
     def configure_mod_ssl_certs(self):
         """Configure the mod_ssl certificate directives"""
@@ -538,7 +490,7 @@ class HTTPInstance(service.Service):
                              'external-helper', helper)
 
         for f in [paths.HTTPD_IPA_CONF, paths.HTTPD_SSL_CONF,
-                  paths.HTTPD_SSL_SITE_CONF, paths.HTTPD_NSS_CONF]:
+                  paths.HTTPD_SSL_SITE_CONF]:
             try:
                 self.fstore.restore_file(f)
             except ValueError as error:
@@ -569,8 +521,6 @@ class HTTPInstance(service.Service):
 
         for filename in remove_files:
             ipautil.remove_file(filename)
-
-        ipautil.remove_file(paths.HTTPD_NSS_CONF, only_if_empty=True)
 
         for d in (
             paths.SYSTEMD_SYSTEM_HTTPD_D_DIR,
@@ -648,43 +598,3 @@ class HTTPInstance(service.Service):
                     service_dn,
                     timeout=api.env.replication_wait_timeout
                 )
-
-    def migrate_to_mod_ssl(self):
-        """For upgrades only, migrate from mod_nss to mod_ssl"""
-        db = certs.CertDB(api.env.realm, nssdir=paths.HTTPD_ALIAS_DIR)
-        nickname = self.get_mod_nss_nickname()
-        with tempfile.NamedTemporaryFile() as temp:
-            pk12_password = ipautil.ipa_generate_password()
-            pk12_pwdfile = ipautil.write_tmp_file(pk12_password)
-            db.export_pkcs12(temp.name, pk12_pwdfile.name, nickname)
-            certs.install_pem_from_p12(temp.name,
-                                       pk12_password,
-                                       paths.HTTPD_CERT_FILE)
-
-            passwd_fname = paths.HTTPD_PASSWD_FILE_FMT.format(
-                            host=api.env.host)
-            with open(passwd_fname, 'wb') as passwd_file:
-                os.fchmod(passwd_file.fileno(), 0o600)
-                passwd_file.write(
-                    ipautil.ipa_generate_password().encode('utf-8'))
-
-            certs.install_key_from_p12(temp.name,
-                                       pk12_password,
-                                       paths.HTTPD_KEY_FILE,
-                                       out_passwd_fname=passwd_fname)
-
-        self.backup_ssl_conf()
-        self.configure_mod_ssl_certs()
-        self.set_mod_ssl_protocol()
-        self.set_mod_ssl_logdir()
-        self.__add_include()
-
-        self.cert = x509.load_certificate_from_file(paths.HTTPD_CERT_FILE)
-
-        if self.ca_is_configured:
-            db.untrack_server_cert(nickname)
-            self.start_tracking_certificates()
-
-        # remove nickname and CA certs from NSS db
-
-        self.disable_nss_conf()

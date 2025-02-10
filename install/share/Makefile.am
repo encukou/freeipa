@@ -107,6 +107,7 @@ dist_app_DATA =				\
 	pki-acme-issuer.conf.template	\
 	pki-acme-realm.conf.template	\
 	ldbm-tuning.ldif		\
+	openssl_cnf.template		\
 	$(NULL)
 
 kdcproxyconfdir = $(IPA_SYSCONF_DIR)/kdcproxy

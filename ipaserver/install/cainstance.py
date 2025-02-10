@@ -49,7 +49,10 @@ from ipaplatform.tasks import tasks
 from ipapython import directivesetter
 from ipapython import dogtag
 from ipapython import ipautil
-from ipapython.certdb import get_ca_nickname
+from ipapython.certdb import (
+    get_ca_nickname,
+    IPA_CA_TRUST_FLAGS,
+    EMPTY_TRUST_FLAGS)
 from ipapython.dn import DN, RDN
 from ipapython.ipa_log_manager import standard_logging_setup
 from ipaserver.secrets.kem import IPAKEMKeys
@@ -278,13 +281,8 @@ class InconsistentCRLGenConfigException(Exception):
 class CAInstance(DogtagInstance):
     """
     When using a dogtag CA the DS database contains just the
-    server cert for DS. The mod_nss database will contain the RA agent
-    cert that will be used to do authenticated requests against dogtag.
-
-    This is done because we use python-nss and will inherit the opened
-    NSS database in mod_python. In nsslib.py we do an nssinit but this will
-    return success if the database is already initialized. It doesn't care
-    if the database is different or not.
+    server cert for DS. The RA agent cert that will be used
+    to do authenticated requests against dogtag.
 
     external is a state machine:
        0 = not an externally signed CA
@@ -934,88 +932,71 @@ class CAInstance(DogtagInstance):
         in a usual deployment would be used in the UI to handle
         administrative duties. IPA does not use this certificate
         except as a bootstrap to generate the RA.
-
-        To do this it bends over backwards a bit by modifying the
-        way typical certificates are retrieved using certmonger by
-        forcing it to call dogtag-submit directly.
         """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdb = certs.CertDB(self.realm, nssdir=tmpdir)
+            chain_file = os.path.join(tmpdir, "chain.pem")
 
-        # create a temp PEM file storing the CA chain
-        chain_file = tempfile.NamedTemporaryFile(
-            mode="w", dir=paths.VAR_LIB_IPA, delete=False)
-        chain_file.close()
+            chain = self.__get_ca_chain()
+            data = base64.b64decode(chain)
+            ipautil.run(
+                [paths.OPENSSL,
+                 "pkcs7",
+                 "-inform",
+                 "DER",
+                 "-print_certs",
+                 "-out", chain_file,
+                 ], stdin=data, capture_output=False)
 
-        chain = self.__get_ca_chain()
-        data = base64.b64decode(chain)
-        ipautil.run(
-            [paths.OPENSSL,
-             "pkcs7",
-             "-inform",
-             "DER",
-             "-print_certs",
-             "-out", chain_file.name,
-             ], stdin=data, capture_output=False)
+            tmpdb.create_noise_file()
+            tmpdb.create_passwd_file()
+            tmpdb.create_certdbs()
+            tmpdb.load_cacert(chain_file, IPA_CA_TRUST_FLAGS)
 
-        # CA agent cert in PEM form
-        agent_cert = tempfile.NamedTemporaryFile(
-            mode="w", dir=paths.VAR_LIB_IPA, delete=False)
-        agent_cert.close()
+            tmpdb.import_pkcs12(
+                paths.DOGTAG_ADMIN_P12, pkcs12_passwd=self.dm_password)
 
-        # CA agent key in PEM form
-        agent_key = tempfile.NamedTemporaryFile(
-            mode="w", dir=paths.VAR_LIB_IPA, delete=False)
-        agent_key.close()
-
-        certs.install_pem_from_p12(paths.DOGTAG_ADMIN_P12,
-                                   self.dm_password,
-                                   agent_cert.name)
-        certs.install_key_from_p12(paths.DOGTAG_ADMIN_P12,
-                                   self.dm_password,
-                                   agent_key.name)
-
-        agent_args = [paths.CERTMONGER_DOGTAG_SUBMIT,
-                      "--cafile", chain_file.name,
-                      "--ee-url", 'http://%s:8080/ca/ee/ca/' % self.fqdn,
-                      "--agent-url",
-                      'https://%s:8443/ca/agent/ca/' % self.fqdn,
-                      "--certfile", agent_cert.name,
-                      "--keyfile", agent_key.name, ]
-
-        helper = " ".join(agent_args)
-
-        # configure certmonger renew agent to use temporary agent cert
-        old_helper = certmonger.modify_ca_helper(
-            ipalib.constants.RENEWAL_CA_NAME, helper)
-
-        try:
-            # The certificate must be requested using caSubsystemCert profile
-            # because this profile does not require agent authentication
-            reqId = certmonger.request_and_wait_for_cert(
-                certpath=(paths.RA_AGENT_PEM, paths.RA_AGENT_KEY),
-                principal='host/%s' % self.fqdn,
-                subject=str(DN(('CN', 'IPA RA'), self.subject_base)),
-                ca=ipalib.constants.RENEWAL_CA_NAME,
-                profile=ipalib.constants.RA_AGENT_PROFILE,
-                pre_command='renew_ra_cert_pre',
-                post_command='renew_ra_cert',
-                storage="FILE",
-                resubmit_timeout=api.env.certmonger_wait_timeout
+            ipautil.run(
+                [paths.CERTUTIL,
+                 "-d", tmpdb.secdir,
+                 "-R", "-s", str(DN(('CN', 'IPA RA'), self.subject_base)),
+                 "-g", "2048",
+                 "-z", os.path.join(tmpdb.secdir, tmpdb.noise_fname),
+                 "-f", tmpdb.passwd_fname,
+                 "-o", os.path.join(tmpdb.secdir, "csr"),
+                 "-a",]
             )
-            self._set_ra_cert_perms()
 
-            self.requestId = str(reqId)
+            tmpdb.pki_issue_certificate(
+                service=None,
+                profile="caSubsystemCert",
+                subject="CN=IPA RA",
+                keyfile=None,
+                certfile=paths.RA_AGENT_PEM,
+                key_passwd_file=None,
+                use_admin=True)
+
             self.ra_cert = x509.load_certificate_from_file(
                 paths.RA_AGENT_PEM)
-        finally:
-            # we can restore the helper parameters
-            certmonger.modify_ca_helper(
-                ipalib.constants.RENEWAL_CA_NAME, old_helper)
-            # remove any temporary files
-            for f in (chain_file, agent_cert, agent_key):
-                try:
-                    os.remove(f.name)
-                except OSError:
-                    pass
+            tmpdb.add_cert(self.ra_cert, 'IPA RA', EMPTY_TRUST_FLAGS)
+            pk12_pwdfile = ipautil.write_tmp_file(self.dm_password)
+            tmpdb.export_pkcs12(
+                os.path.join(tmpdb.secdir, "ra.p12"),
+                pk12_pwdfile.name,
+                'IPA RA')
+            certs.install_key_from_p12(
+                os.path.join(tmpdb.secdir, "ra.p12"),
+                self.dm_password, paths.RA_AGENT_KEY)
+        self._set_ra_cert_perms()
+        update_people_entry(self.ra_cert)
+        certmonger.start_tracking(
+            certpath=(paths.RA_AGENT_PEM, paths.RA_AGENT_KEY),
+            ca=ipalib.constants.RENEWAL_CA_NAME,
+            profile=ipalib.constants.RA_AGENT_PROFILE,
+            pre_command='renew_ra_cert_pre',
+            post_command='renew_ra_cert',
+            storage='FILE',
+        )
 
     def prepare_crl_publish_dir(self):
         """
