@@ -1,11 +1,11 @@
-# Andi Chandler <andi@gowling.com>, 2017. #zanata, 2024.
-# Andi Chandler <andi@gowling.com>, 2018. #zanata, 2024.
+# Andi Chandler <andi@gowling.com>, 2017. #zanata, 2024, 2025.
+# Andi Chandler <andi@gowling.com>, 2018. #zanata, 2024, 2025.
 msgid ""
 msgstr ""
 "Project-Id-Version: freeipa 4.9.0.dev201908140712+gitc9938e3d8\n"
 "Report-Msgid-Bugs-To: https://pagure.io/freeipa/new_issue\n"
 "POT-Creation-Date: 2024-05-28 15:09+0200\n"
-"PO-Revision-Date: 2024-11-27 00:39+0000\n"
+"PO-Revision-Date: 2025-02-10 02:26+0000\n"
 "Last-Translator: Andi Chandler <andi@gowling.com>\n"
 "Language-Team: English (United Kingdom) <https://translate.fedoraproject.org/"
 "projects/freeipa/master/en_GB/>\n"
@@ -14,7 +14,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.8.2\n"
+"X-Generator: Weblate 5.9.2\n"
 
 #, c-format
 msgid "cannot open configuration file %s\n"
@@ -26,11 +26,11 @@ msgstr "cannot stat() configuration file %s\n"
 
 #, c-format
 msgid "out of memory\n"
-msgstr ""
+msgstr "out of memory\n"
 
 #, c-format
 msgid "read error\n"
-msgstr ""
+msgstr "read error\n"
 
 #, c-format
 msgid "Kerberos context initialization failed: %1$s (%2$d)\n"
