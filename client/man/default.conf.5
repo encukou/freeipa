@@ -191,7 +191,7 @@ Specifies the IPA Server hostname.
 Skip client vs. server API version checking. Can lead to errors/strange behavior when newer clients talk to older servers. Use with caution.
 .TP
 .B startup_timeout <time in seconds>
-Controls the amount of time waited when starting a service. The default value is 120 seconds.
+Controls the amount of time waited when starting a service. The default value is 90 seconds, the same as the default systemd startup timeout. If configuring a CA the startup_timeout value will be added as an override for TimeoutStartSec in systemd. If installation times out when starting the CA create /etc/ipa/installer.conf with this value set.
 .TP
 .B startup_traceback <boolean>
 If the IPA server fails to start and this value is True the server will attempt to generate a python traceback to make identifying the underlying problem easier.

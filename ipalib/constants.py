@@ -189,8 +189,9 @@ DEFAULT_CONFIG = (
 
     # Time to wait for a service to start, in seconds.
     # Note that systemd has a DefaultTimeoutStartSec of 90 seconds. Higher
-    # values are not effective unless systemd is reconfigured, too.
-    ('startup_timeout', 120),
+    # values are not effective unless systemd is reconfigured, too. Or you
+    # can update the systemd service file with its own TimeoutStartSec.
+    ('startup_timeout', 90),
     # How long http connection should wait for reply [seconds].
     ('http_timeout', 30),
     # How long to wait for an entry to appear on a replica
