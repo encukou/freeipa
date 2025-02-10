@@ -390,6 +390,48 @@ class Env:
             self['config_loaded'] = True
         return i, len(items)
 
+    def _derive_uris(self, **defaults):
+        """
+        Fill in the missing URLs based on the ones that are already set.
+        """
+        # Derive xmlrpc_uri from server
+        # (Note that this is done before deriving jsonrpc_uri from xmlrpc_uri
+        # and server from jsonrpc_uri so that when only server or xmlrpc_uri
+        # is specified, all 3 keys have a value.)
+        if 'xmlrpc_uri' not in self and 'server' in self:
+            self.xmlrpc_uri = 'https://{}/ipa/xml'.format(self.server)
+
+        # Derive ldap_uri from server
+        if 'ldap_uri' not in self and 'server' in self:
+            self.ldap_uri = 'ldap://{}'.format(self.server)
+
+        # Derive jsonrpc_uri from xmlrpc_uri
+        if 'jsonrpc_uri' not in self:
+            if 'xmlrpc_uri' in self:
+                xmlrpc_uri = self.xmlrpc_uri
+            else:
+                xmlrpc_uri = defaults.get('xmlrpc_uri')
+            if xmlrpc_uri:
+                (scheme, netloc, uripath, params, query, fragment) = urlparse(
+                    xmlrpc_uri
+                )
+                uripath = uripath.replace("/xml", "/json", 1)
+                self.jsonrpc_uri = urlunparse(
+                    (scheme, netloc, uripath, params, query, fragment)
+                )
+
+        if 'server' not in self:
+            if 'jsonrpc_uri' in self:
+                jsonrpc_uri = self.jsonrpc_uri
+            else:
+                jsonrpc_uri = defaults.get('jsonrpc_uri')
+            if jsonrpc_uri:
+                parsed = urlparse(jsonrpc_uri)
+                self.server = parsed.netloc
+
+        # Set flag
+        self.urls_derived = True
+
     def _join(self, key, *parts):
         """
         Append path components in ``parts`` to base path ``self[key]``.
@@ -536,19 +578,21 @@ class Env:
 
             1. Call `Env._bootstrap()` if it hasn't already been called.
 
-            2. Merge-in variables from the configuration file ``self.conf``
+            2. If any overrides are set, derive the URLs from the existing data
+
+            3. Merge-in variables from the configuration file ``self.conf``
                (if it exists) by calling `Env._merge_from_file()`.
 
-            3. Merge-in variables from the defaults configuration file
+            4. Merge-in variables from the defaults configuration file
                ``self.conf_default`` (if it exists) by calling
                `Env._merge_from_file()`.
 
-            4. Intelligently fill-in the *in_server* , *logdir*, *log*, and
+            5. Intelligently fill-in the *in_server* , *logdir*, *log*, and
                *jsonrpc_uri* variables if they haven't already been set.
 
-            5. Merge-in the variables in ``defaults`` by calling `Env._merge()`.
-               In normal circumstances ``defaults`` will simply be those
-               specified in `constants.DEFAULT_CONFIG`.
+            6. Merge-in the variables in ``defaults`` by calling
+               `Env._merge()`. In normal circumstances ``defaults`` will simply
+               be those specified in `constants.DEFAULT_CONFIG`.
 
         After this method is called, all the environment variables used by all
         the built-in plugins will be available.  As such, this method should be
@@ -564,6 +608,10 @@ class Env:
         """
         self.__doing('_finalize_core')
         self.__do_if_not_done('_bootstrap')
+
+        # If overrides are set, derive the URIs from the existing data
+        # if 'server' in self or 'xmlrpc_uri' in self:
+        #    self._derive_uris(**defaults)
 
         # Merge in context config file and then default config file:
         mode = self.__d.get('mode')  # pylint: disable=no-member
@@ -601,38 +649,9 @@ class Env:
         if 'basedn' not in self and 'domain' in self:
             self.basedn = DN(*(('dc', dc) for dc in self.domain.split('.')))
 
-        # Derive xmlrpc_uri from server
-        # (Note that this is done before deriving jsonrpc_uri from xmlrpc_uri
-        # and server from jsonrpc_uri so that when only server or xmlrpc_uri
-        # is specified, all 3 keys have a value.)
-        if 'xmlrpc_uri' not in self and 'server' in self:
-            self.xmlrpc_uri = 'https://{}/ipa/xml'.format(self.server)
-
-        # Derive ldap_uri from server
-        if 'ldap_uri' not in self and 'server' in self:
-            self.ldap_uri = 'ldap://{}'.format(self.server)
-
-        # Derive jsonrpc_uri from xmlrpc_uri
-        if 'jsonrpc_uri' not in self:
-            if 'xmlrpc_uri' in self:
-                xmlrpc_uri = self.xmlrpc_uri
-            else:
-                xmlrpc_uri = defaults.get('xmlrpc_uri')
-            if xmlrpc_uri:
-                (scheme, netloc, uripath, params, query, fragment
-                        ) = urlparse(xmlrpc_uri)
-                uripath = uripath.replace('/xml', '/json', 1)
-                self.jsonrpc_uri = urlunparse((
-                        scheme, netloc, uripath, params, query, fragment))
-
-        if 'server' not in self:
-            if 'jsonrpc_uri' in self:
-                jsonrpc_uri = self.jsonrpc_uri
-            else:
-                jsonrpc_uri = defaults.get('jsonrpc_uri')
-            if jsonrpc_uri:
-                parsed = urlparse(jsonrpc_uri)
-                self.server = parsed.netloc
+        # If not already set, derive the URIs from the existing data
+        #if 'urls_derived' not in self:
+        self._derive_uris(**defaults)
 
         self._merge(**defaults)
 

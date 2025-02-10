@@ -1561,6 +1561,31 @@ class TestIPACommand(IntegrationTest):
 
         assert isrgrootx1_nick in result
 
+    def test_ipa_force_server(self):
+        """
+        Test ipa command with --server option
+        Do ping to a replica from the master, verify that the ipa tool
+        connected to the replica
+        """
+        tasks.kinit_admin(self.master)
+        replica = self.replicas[0]
+
+        result = self.master.run_command(
+            ["ipa", "--server", replica.hostname, "--debug", "ping"],
+        )
+        assert replica.hostname in result.stderr_text
+
+        # Test with invalid server
+        failresult = self.master.run_command(
+            ["ipa",
+             "--server",
+             '1' + str(replica.hostname),
+             "--debug",
+             "ping"],
+            raiseonerr=False
+        )
+        assert '[Errno -2] Name or service not known' in failresult.stderr_text
+
 
 class TestIPACommandWithoutReplica(IntegrationTest):
     """

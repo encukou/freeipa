@@ -65,14 +65,14 @@ jobs:
         timeout: 1800
         topology: *build
 
-  fedora-latest/temp_commit:
+  fedora-latest/test_commands:
     requires: [fedora-latest/build]
     priority: 50
     job:
       class: RunPytest
       args:
         build_url: '{fedora-latest/build_url}'
-        test_suite: test_integration/test_REPLACEME.py
+        test_suite: test_integration/test_commands.py
         template: *ci-master-latest
-        timeout: 3600
+        timeout: 5400
         topology: *master_1repl_1client
